@@ -1,0 +1,46 @@
+defaults:
+  log_level: INFO
+
+test:
+  host: 127.0.0.1
+  port: 9999
+  count: 5000
+  size: 64
+  concurrency: 200
+  timeout: 2.0
+  rate: 5000
+  max_retries: 1
+  warmup: 100
+  metrics_output: metrics/latest.json
+  socket_rcvbuf: 4194304
+  socket_sndbuf: 4194304
+  co_correction: true
+  progress_enabled: true
+  label: candidate
+  sla_path: sla.yaml
+  fail_on_sla: true
+  pdf_report: reports/latest.pdf
+
+server:
+  bind: 0.0.0.0
+  port: 9999
+
+monitor:
+  bind: 0.0.0.0
+  http_port: 8888
+  interval: 30
+
+targets:
+  - label: hq
+    host: 127.0.0.1
+    port: 9999
+  - label: branch
+    host: 127.0.0.1
+    port: 9998
+
+sla:
+  min_success_rate: 99.9
+  max_p95_us: 1500.0
+  max_p99_us: 2500.0
+  max_jitter_us: 500.0
+  min_pps: 1000.0

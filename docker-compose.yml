@@ -1,0 +1,24 @@
+services:
+  neural-blitz-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neural-blitz-monitor
+    command:
+      - python
+      - /app/neural_blitz_ng.py
+      - monitor
+      - --targets-file
+      - /app/config/neural_blitz.yaml
+      - --http-port
+      - "8888"
+      - --interval
+      - "30"
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./neural_blitz.yaml:/app/config/neural_blitz.yaml:ro
+      - ./sla.yaml:/app/config/sla.yaml:ro
+      - ./metrics:/app/metrics
+      - ./reports:/app/reports
+    restart: unless-stopped

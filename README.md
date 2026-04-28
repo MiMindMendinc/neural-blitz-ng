@@ -1,71 +1,106 @@
 # Neural Blitz NG
 
-Neural Blitz NG is a production-ready UDP network latency benchmarking and monitoring tool built by Michigan MindMend Inc.
+**Production-oriented UDP latency benchmarking and monitoring for small teams, nonprofits, local-first operators, and practical network maintainers.**
 
-It is designed for nonprofits, small businesses, and service providers that need practical network visibility without enterprise complexity.
+Neural Blitz NG is a lightweight command-line tool for measuring UDP latency, packet loss, jitter, and service-level thresholds without enterprise monitoring complexity. It is built by Michigan MindMend Inc. for operators who need clear network visibility, simple deployment, and auditable local metrics.
 
-## Included
+## Why it exists
 
-- `neural_blitz_ng.py`
-  Main application with `test`, `server`, `batch`, and `monitor` modes
-- `Dockerfile`
-  Container image for monitor deployment
-- `docker-compose.yml`
-  One-command container deployment
-- `neural_blitz.yaml`
-  Sample configuration and targets file
-- `sla.yaml`
-  Sample SLA thresholds
-- `Neural_Blitz_NG_One_Pager.pdf`
-  Sales and partner-facing overview
+Many small organizations do not need a full enterprise observability platform. They need a tool that can answer simple questions quickly:
 
-## Core Capabilities
+- Is this link healthy?
+- Are packets being dropped?
+- Did latency get worse after a change?
+- Are we meeting our internal SLA?
+- Can we expose metrics to Prometheus or another dashboard later?
 
-- Single-run latency and packet-loss testing
+Neural Blitz NG is designed for that middle ground: practical, local-first, scriptable, and easy to deploy.
+
+## Core capabilities
+
+- Single-run UDP latency and packet-loss testing
+- Local UDP echo server mode
 - Batch multi-target benchmarking from YAML
-- PDF report generation
-- Monitor mode with HTTP metrics
-- Prometheus-compatible endpoint
+- Continuous monitor mode with HTTP metrics
+- Prometheus-compatible metrics endpoint
 - JSON and CSV metrics exports
-- SLA checking and comparison workflows
+- PDF report generation
+- SLA threshold checks
+- Metrics comparison workflows
+- Rich terminal output and progress bars
+- Docker and Docker Compose deployment
 
-## Quick Start
+## Included files
 
-Install locally:
+| File | Purpose |
+| --- | --- |
+| `neural_blitz_ng.py` | Main CLI application with `test`, `server`, `batch`, `monitor`, and related workflows |
+| `pyproject.toml` | Python package metadata and console script entry point |
+| `neural_blitz.yaml` | Example config with defaults, targets, and monitor settings |
+| `sla.yaml` | Example SLA threshold file |
+| `Dockerfile` | Container image for monitor deployment |
+| `docker-compose.yml` | One-command local deployment |
+| `Neural_Blitz_NG_One_Pager.pdf` | Sales and partner-facing overview |
 
-```powershell
+## Install
+
+```bash
+python -m pip install .
+```
+
+For development:
+
+```bash
+python -m pip install -e .
+```
+
+Or install dependencies directly when running the single-file script:
+
+```bash
 python -m pip install aiohttp pyyaml reportlab rich
 ```
 
-Run a local echo server:
+## Quick start
 
-```powershell
-python neural_blitz_ng.py server --bind 127.0.0.1 --port 9999
+Start a local UDP echo server:
+
+```bash
+neural-blitz server --bind 127.0.0.1 --port 9999
 ```
 
-Run a test:
+Run a test against it:
 
-```powershell
-python neural_blitz_ng.py test --host 127.0.0.1 --port 9999 --metrics-output metrics\latest.json --pdf-report reports\latest.pdf
+```bash
+neural-blitz test --host 127.0.0.1 --port 9999 --count 10000 --concurrency 200 --rate 5000
 ```
 
-Run a batch test:
+Write metrics and a PDF report:
 
-```powershell
-python neural_blitz_ng.py batch --targets-file neural_blitz.yaml --output batch_results.json
+```bash
+neural-blitz test \
+  --host 127.0.0.1 \
+  --port 9999 \
+  --metrics-output metrics/latest.json \
+  --pdf-report reports/latest.pdf
 ```
 
-Run monitor mode:
+Run a batch test from YAML:
 
-```powershell
-python neural_blitz_ng.py monitor --targets-file neural_blitz.yaml --http-port 8888 --interval 30
+```bash
+neural-blitz batch --targets-file neural_blitz.yaml --output metrics/batch.json
+```
+
+Run continuous monitor mode:
+
+```bash
+neural-blitz monitor --targets-file neural_blitz.yaml --http-port 8888 --interval 30
 ```
 
 ## Docker
 
 Build and run with Docker Compose:
 
-```powershell
+```bash
 docker compose up --build
 ```
 
@@ -75,11 +110,54 @@ Then open:
 - `http://127.0.0.1:8888/metrics`
 - `http://127.0.0.1:8888/metrics/prometheus`
 
-## Recommended Repo Additions
+## Configuration
 
-If you publish this to GitHub next, add:
+`neural_blitz.yaml` can define defaults, test settings, monitor settings, and target groups.
 
-- a license file
-- a few benchmark screenshots or sample reports
-- a short case study or sample output folder
-- GitHub issue templates for bugs and feature requests
+Example target block:
+
+```yaml
+targets:
+  - label: hq
+    host: 127.0.0.1
+    port: 9999
+  - label: branch
+    host: 127.0.0.1
+    port: 9998
+```
+
+## SLA checks
+
+`sla.yaml` supports threshold keys such as:
+
+```yaml
+min_success_rate: 99.9
+max_p95_us: 1500.0
+max_p99_us: 2500.0
+max_jitter_us: 500.0
+min_pps: 1000.0
+```
+
+Use SLA checks to fail a run when a target falls below your required reliability threshold.
+
+## Metrics endpoints
+
+Monitor mode exposes:
+
+- `/health` health status
+- `/metrics` JSON metrics
+- `/metrics/prometheus` Prometheus text format
+- `/api/targets` target labels
+- `/api/target/<label>` target history
+
+## Michigan MindMend ecosystem
+
+Neural Blitz NG can serve as a lightweight monitoring layer for local-first infrastructure, Sentinel-style safety stacks, nonprofit deployments, edge AI labs, and small service-provider environments where simple network proof matters.
+
+## Development status
+
+This repo is an active production-oriented build. The core CLI and monitoring workflow are present, with tests and CI included to keep future changes honest.
+
+## License
+
+MIT License. See `LICENSE` for details.

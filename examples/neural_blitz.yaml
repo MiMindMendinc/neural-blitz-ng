@@ -1,4 +1,6 @@
-# Neural Blitz NG — defaults and targets (see examples/ for annotated version)
+# Neural Blitz NG example configuration
+# Copy to neural_blitz.yaml and adjust for your environment.
+
 defaults:
   count: 1000
   size: 64
@@ -19,7 +21,7 @@ targets:
   - label: local
     host: 127.0.0.1
     port: 9999
-    sla: sla.yaml
+    sla: examples/sla.yaml
 
 server:
   bind: 127.0.0.1

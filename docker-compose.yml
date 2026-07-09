@@ -4,21 +4,17 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: neural-blitz-monitor
-    command:
-      - python
-      - /app/neural_blitz_ng.py
-      - monitor
-      - --targets-file
-      - /app/config/neural_blitz.yaml
-      - --http-port
-      - "8888"
-      - --interval
-      - "30"
     ports:
       - "8888:8888"
     volumes:
-      - ./neural_blitz.yaml:/app/config/neural_blitz.yaml:ro
-      - ./sla.yaml:/app/config/sla.yaml:ro
+      - ./examples/neural_blitz.yaml:/app/config/neural_blitz.yaml:ro
+      - ./examples/sla.yaml:/app/config/sla.yaml:ro
       - ./metrics:/app/metrics
       - ./reports:/app/reports
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

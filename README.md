@@ -1,19 +1,55 @@
+<div align="center">
+
 # Neural Blitz NG
 
-**Measure the link before the outage writes the story.**
+### Measure the link before the outage writes the story.
+
+**Local-first UDP latency benchmarking and monitoring for practical operators.**
 
 [![CI](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/ci.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Docker](https://img.shields.io/badge/docker-ready-blue)
-![Ruff](https://img.shields.io/badge/ruff-enabled-261230)
-![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)
+[![CodeQL](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/codeql.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/codeql.yml)
+[![Release](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/release.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/release.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-9.0.0-blue)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](docs/DOCKER.md)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://github.com/astral-sh/ruff)
+[![mypy](https://img.shields.io/badge/types-mypy-blue)](https://mypy-lang.org/)
+[![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)](UPGRADE_REPORT.md)
+[![Security](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/contributing-welcome-0f766e)](CONTRIBUTING.md)
+[![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
-Local-first UDP latency benchmarking and monitoring for nonprofits, small businesses, MSPs, homelab operators, rural connectivity projects, and edge AI infrastructure teams.
+[Quick Start](#quick-start) ·
+[Install](#install) ·
+[Commands](#commands) ·
+[Docker](#docker) ·
+[Prometheus](#prometheus) ·
+[Safety](#safety-model) ·
+[Docs](docs/QUICKSTART.md) ·
+[Changelog](CHANGELOG.md)
+
+Built by **[Michigan MindMend Inc.](https://github.com/MiMindMendinc)** for nonprofits, small businesses, MSPs, homelabs, rural connectivity projects, and edge AI operators.
+
+</div>
+
+---
 
 ## What it does
 
-Neural Blitz NG measures **UDP latency, packet loss, jitter, and SLA compliance** with a practical CLI, YAML configuration, Prometheus endpoints, and Docker deployment — without enterprise monitoring complexity.
+Neural Blitz NG measures **UDP latency, packet loss, jitter, and SLA compliance** with a practical CLI, YAML configuration, Prometheus endpoints, PDF reports, and Docker deployment — without enterprise monitoring complexity.
+
+| Capability | Description |
+| ---------- | ----------- |
+| UDP echo server | Local test target for repeatable benchmarks |
+| Single-target test | Latency percentiles, loss, jitter, CO correction |
+| Batch YAML mode | Multi-target runs from one config file |
+| Monitor mode | Periodic tests + HTTP `/health` and `/metrics` |
+| Prometheus | `neural_blitz_*` metrics for Grafana |
+| SLA checks | Pass/fail thresholds with exit code `2` |
+| Compare mode | Baseline vs candidate regression checks |
+| PDF reports | Optional branded reports via `reportlab` |
 
 ## Why it exists
 
@@ -29,12 +65,20 @@ Neural Blitz NG fills the gap between `ping` and a full observability platform.
 ## Quick start
 
 ```bash
+git clone https://github.com/MiMindMendinc/neural-blitz-ng.git
+cd neural-blitz-ng
 pip install -e ".[dev,pdf]"
+```
 
-# Terminal 1 — echo server
+**Terminal 1 — echo server**
+
+```bash
 neural-blitz server --bind 127.0.0.1 --port 9999
+```
 
-# Terminal 2 — latency test
+**Terminal 2 — latency test**
+
+```bash
 neural-blitz test --host 127.0.0.1 --port 9999 --count 1000 --concurrency 50
 ```
 
@@ -42,17 +86,18 @@ neural-blitz test --host 127.0.0.1 --port 9999 --count 1000 --concurrency 50
 
 ```bash
 pip install neural-blitz-ng
-# optional PDF reports
-pip install 'neural-blitz-ng[pdf]'
-# optional uvloop on Linux/macOS
-pip install 'neural-blitz-ng[uvloop]'
+pip install 'neural-blitz-ng[pdf]'      # PDF reports
+pip install 'neural-blitz-ng[uvloop]'    # faster asyncio on Linux/macOS
+pip install 'neural-blitz-ng[dev]'       # contributors
 ```
 
 Development:
 
 ```bash
 make dev
+make lint
 make test
+make coverage
 ```
 
 ## Commands
@@ -68,6 +113,11 @@ make test
 | `neural-blitz validate-sla` | Validate SLA YAML |
 | `neural-blitz version` | Print version |
 | `neural-blitz init-config` | Write sample config |
+
+```bash
+neural-blitz --help
+python -m neural_blitz --help
+```
 
 ## Batch mode
 
@@ -93,7 +143,9 @@ See [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Prometheus
 
-Scrape `/metrics/prometheus` from monitor mode. Metric names use the `neural_blitz_*` prefix. See [docs/PROMETHEUS.md](docs/PROMETHEUS.md).
+Scrape `/metrics/prometheus` from monitor mode. Metric names use the `neural_blitz_*` prefix.
+
+See [docs/PROMETHEUS.md](docs/PROMETHEUS.md) and [examples/prometheus.yml](examples/prometheus.yml).
 
 ## SLA checks
 
@@ -134,12 +186,27 @@ Read [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) and [SECURITY.md](SECURITY
 ## Project structure
 
 ```text
-neural_blitz/          # Python package
-tests/                 # pytest suite
+neural_blitz/          # Python package (CLI, UDP, metrics, monitor)
+tests/                 # pytest suite (99 tests, 86% coverage)
 docs/                  # operator documentation
 examples/              # YAML, Prometheus, Grafana samples
 .github/workflows/     # CI, CodeQL, release
 ```
+
+## Documentation
+
+| Doc | Topic |
+| --- | ----- |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | 5-minute local setup |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | YAML config reference |
+| [docs/METRICS.md](docs/METRICS.md) | Metrics fields and export |
+| [docs/SLA.md](docs/SLA.md) | SLA thresholds |
+| [docs/DOCKER.md](docs/DOCKER.md) | Container deployment |
+| [docs/PROMETHEUS.md](docs/PROMETHEUS.md) | Prometheus integration |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark guidance |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
+| [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Authorized-use policy |
+| [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | Maintainer release steps |
 
 ## Roadmap
 

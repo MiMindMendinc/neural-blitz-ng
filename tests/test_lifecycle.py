@@ -26,8 +26,6 @@ async def test_run_monitor_loop_one_cycle(mock_load, mock_batch):
 
     await asyncio.sleep(0.3)
 
-    import urllib.request
-
     # discover bound port from mock_batch being called
     assert mock_batch.called
 

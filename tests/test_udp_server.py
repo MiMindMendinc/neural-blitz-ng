@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from neural_blitz.udp_server import EchoServerProtocol, run_server
+from neural_blitz.udp_server import EchoServerProtocol
 
 
 @pytest.mark.integration

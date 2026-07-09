@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from neural_blitz.errors import MetricsError
-from neural_blitz.metrics import LatencyStats, load_metrics, validate_metrics_output_path
-from neural_blitz.errors import ConfigError
+from neural_blitz.errors import ConfigError, MetricsError
+from neural_blitz.metrics import load_metrics, validate_metrics_output_path
 
 
 @pytest.mark.unit

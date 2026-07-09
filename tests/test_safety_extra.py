@@ -1,7 +1,5 @@
 """Safety module edge-case tests."""
 
-import os
-
 import pytest
 
 from neural_blitz.errors import SafetyViolation

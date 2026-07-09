@@ -193,7 +193,13 @@ def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -
 
 
 def build_monitor_config(args: argparse.Namespace, config_data: dict[str, Any]) -> MonitorConfig:
-    defaults: dict[str, Any] = {"bind": "0.0.0.0", "http_port": 8888, "interval": 30, "history_limit": 100, "log_level": "INFO"}
+    defaults: dict[str, Any] = {
+        "bind": "0.0.0.0",
+        "http_port": 8888,
+        "interval": 30,
+        "history_limit": 100,
+        "log_level": "INFO",
+    }
     defaults.update(get_config_section(config_data, "monitor"))
     return MonitorConfig(
         bind=str(args.bind if args.bind is not None else defaults["bind"]),

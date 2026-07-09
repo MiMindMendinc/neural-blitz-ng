@@ -19,9 +19,8 @@ def test_is_private_network():
 
 @pytest.mark.unit
 def test_pdf_dependency_missing():
-    with mock.patch("neural_blitz.report_pdf.PDF_REPORTS_AVAILABLE", False):
-        with pytest.raises(DependencyMissing):
-            ensure_pdf_reporting_available()
+    with mock.patch("neural_blitz.report_pdf.PDF_REPORTS_AVAILABLE", False), pytest.raises(DependencyMissing):
+        ensure_pdf_reporting_available()
 
 
 @pytest.mark.unit

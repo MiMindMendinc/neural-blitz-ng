@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from neural_blitz.compare import write_comparison_output
-from neural_blitz.metrics import LatencyStats
 
 
 @pytest.mark.unit

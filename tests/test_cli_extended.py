@@ -1,7 +1,6 @@
 """Extended CLI and command handler tests."""
 
 import json
-import textwrap
 from pathlib import Path
 from unittest import mock
 

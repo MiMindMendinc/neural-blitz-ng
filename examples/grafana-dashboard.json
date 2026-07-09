@@ -1,0 +1,24 @@
+{
+  "title": "Neural Blitz NG",
+  "tags": ["neural-blitz", "udp", "latency"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Success Rate %",
+      "type": "timeseries",
+      "targets": [{ "expr": "neural_blitz_success_rate_percent" }]
+    },
+    {
+      "title": "P95 Latency (us)",
+      "type": "timeseries",
+      "targets": [{ "expr": "neural_blitz_latency_p95_us" }]
+    },
+    {
+      "title": "Packet Loss Total",
+      "type": "timeseries",
+      "targets": [{ "expr": "neural_blitz_packets_lost_total" }]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

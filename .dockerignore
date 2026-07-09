@@ -1,3 +1,4 @@
+.git/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -5,14 +6,12 @@ __pycache__/
 dist/
 build/
 .coverage
-coverage.xml
 htmlcov/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.venv/
-venv/
 metrics/
 reports/
 *.pdf
-!Neural_Blitz_NG_One_Pager.pdf
+.venv/
+venv/

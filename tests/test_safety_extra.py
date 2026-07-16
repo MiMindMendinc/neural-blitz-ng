@@ -39,5 +39,6 @@ def test_rate_limit():
 @pytest.mark.unit
 def test_env_override_warns(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("NEURAL_BLITZ_MAX_COUNT", "2000000")
-    limits = SafetyLimits.from_env()
+    with pytest.warns(UserWarning, match="Safety ceiling NEURAL_BLITZ_MAX_COUNT overridden"):
+        limits = SafetyLimits.from_env()
     assert limits.max_count == 2_000_000

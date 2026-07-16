@@ -90,9 +90,9 @@ def test_cli_test_safety_violation(capsys):
 
 
 @pytest.mark.unit
-@mock.patch("neural_blitz.cli.asyncio.run")
-def test_cli_test_localhost(mock_run, capsys):
-    mock_run.return_value = LatencyStats(success_rate=100.0, count_received=10, count_sent=10)
+@mock.patch("neural_blitz.cli.run_test", new_callable=mock.AsyncMock)
+def test_cli_test_localhost(mock_run_test, capsys):
+    mock_run_test.return_value = LatencyStats(success_rate=100.0, count_received=10, count_sent=10)
     code = main(
         [
             "--no-rich",

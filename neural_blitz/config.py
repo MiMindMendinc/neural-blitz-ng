@@ -18,6 +18,9 @@ except ImportError:
 
 @dataclass(frozen=True)
 class TestConfig:
+    # This is an application configuration model, not a pytest test class.
+    __test__ = False
+
     host: str = "127.0.0.1"
     port: int = 9999
     count: int = 1000

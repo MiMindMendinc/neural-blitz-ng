@@ -38,7 +38,7 @@ jobs:
         run: mypy neural_blitz
 
       - name: Pytest with coverage
-        run: pytest --cov=neural_blitz --cov-report=term-missing --cov-report=xml -q
+        run: pytest -W error --cov=neural_blitz --cov-report=term-missing --cov-report=xml -q
 
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
@@ -51,3 +51,9 @@ jobs:
         run: |
           neural-blitz --help
           python -m neural_blitz version
+
+      - name: Build and validate distribution
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m build
+          python -m twine check dist/*

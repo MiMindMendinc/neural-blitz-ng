@@ -73,10 +73,11 @@ def test_execute_validate_config(tmp_path):
 
 
 @pytest.mark.unit
-@mock.patch("neural_blitz.cli.asyncio.run")
-def test_execute_server(mock_run):
+@mock.patch("neural_blitz.cli.run_server", new_callable=mock.AsyncMock)
+def test_execute_server(mock_run_server):
     args = Namespace(bind="127.0.0.1", port=9999, log_level="INFO")
     assert execute_server(args, {}, use_rich=False) == 0
+    mock_run_server.assert_awaited_once()
 
 
 @pytest.mark.unit

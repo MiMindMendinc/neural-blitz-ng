@@ -51,14 +51,14 @@ def test_render_batch_results_json(capsys):
 
 
 @pytest.mark.unit
-@mock.patch("neural_blitz.cli.asyncio.run")
+@mock.patch("neural_blitz.cli.run_batch_tests", new_callable=mock.AsyncMock)
 @mock.patch("neural_blitz.cli.load_targets_file")
-def test_execute_batch(mock_load, mock_run):
+def test_execute_batch(mock_load, mock_run_batch):
     mock_load.return_value = {
         "targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}],
         "__base_dir": ".",
     }
-    mock_run.return_value = [LatencyStats(label="local", success_rate=100.0)]
+    mock_run_batch.return_value = [LatencyStats(label="local", success_rate=100.0)]
     args = Namespace(
         targets_file="t.yaml",
         output=None,
@@ -71,14 +71,14 @@ def test_execute_batch(mock_load, mock_run):
 
 
 @pytest.mark.unit
-@mock.patch("neural_blitz.cli.asyncio.run")
+@mock.patch("neural_blitz.cli.run_monitor_loop", new_callable=mock.AsyncMock)
 @mock.patch("neural_blitz.cli.load_targets_file")
-def test_execute_monitor(mock_load, mock_run):
+def test_execute_monitor(mock_load, mock_monitor):
     mock_load.return_value = {
         "targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}],
         "__base_dir": ".",
     }
-    mock_run.return_value = None
+    mock_monitor.return_value = None
     args = Namespace(
         targets_file="t.yaml",
         bind=None,
@@ -91,11 +91,11 @@ def test_execute_monitor(mock_load, mock_run):
 
 
 @pytest.mark.unit
-@mock.patch("neural_blitz.cli.asyncio.run")
-def test_execute_test_with_sla(mock_run, tmp_path):
+@mock.patch("neural_blitz.cli.run_test", new_callable=mock.AsyncMock)
+def test_execute_test_with_sla(mock_run_test, tmp_path):
     sla = tmp_path / "sla.yaml"
     sla.write_text("min_success_rate: 50.0\n", encoding="utf-8")
-    mock_run.return_value = LatencyStats(success_rate=100.0, count_received=10, count_sent=10)
+    mock_run_test.return_value = LatencyStats(success_rate=100.0, count_received=10, count_sent=10)
     args = Namespace(
         host="127.0.0.1",
         port=9999,

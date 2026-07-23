@@ -61,9 +61,7 @@ async def test_run_server_signal_shutdown():
     ("contents", "message"),
     [(None, "Unable to read monitor auth token file"), (" \n", "Monitor auth token file is empty")],
 )
-async def test_run_monitor_loop_rejects_missing_or_empty_auth_token(
-    tmp_path: Path, contents: str | None, message: str
-):
+async def test_run_monitor_loop_rejects_missing_or_empty_auth_token(tmp_path: Path, contents: str | None, message: str):
     token_file = tmp_path / "monitor.token"
     if contents is not None:
         token_file.write_text(contents, encoding="utf-8")

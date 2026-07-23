@@ -134,11 +134,7 @@ def test_normalize_test_values_handles_boolean_and_string_optional_flags():
 def test_validate_config_reports_each_malformed_target_shape(tmp_path: Path):
     path = tmp_path / "malformed-targets.yaml"
     path.write_text(
-        "targets:\n"
-        "  - bad-item\n"
-        "  - port: 0\n"
-        "  - host: localhost\n"
-        "    port: bad\n",
+        "targets:\n  - bad-item\n  - port: 0\n  - host: localhost\n    port: bad\n",
         encoding="utf-8",
     )
     errors = validate_config_file(str(path))
@@ -332,9 +328,7 @@ def test_execute_validate_sla_serializes_load_errors(mock_load_sla: mock.Mock, c
 @mock.patch("neural_blitz.cli.RICH_AVAILABLE", True)
 @mock.patch("neural_blitz.cli.console")
 @mock.patch("neural_blitz.cli.write_sample_config")
-def test_execute_init_config_uses_rich_success_panel(
-    mock_write: mock.Mock, mock_console: mock.Mock, tmp_path: Path
-):
+def test_execute_init_config_uses_rich_success_panel(mock_write: mock.Mock, mock_console: mock.Mock, tmp_path: Path):
     output = tmp_path / "nested" / "config.yaml"
     assert cli.execute_init_config(Namespace(output=str(output)), use_rich=True) == 0
     mock_write.assert_called_once_with(str(output))
@@ -344,9 +338,7 @@ def test_execute_init_config_uses_rich_success_panel(
 @pytest.mark.unit
 @mock.patch("neural_blitz.cli.run_batch_tests", new_callable=mock.AsyncMock, return_value=[])
 @mock.patch("neural_blitz.cli.load_targets_file", return_value={"targets": [{"host": "127.0.0.1"}]})
-def test_execute_batch_authorizes_targets_before_running(
-    mock_load_targets: mock.Mock, mock_run_batch: mock.AsyncMock
-):
+def test_execute_batch_authorizes_targets_before_running(mock_load_targets: mock.Mock, mock_run_batch: mock.AsyncMock):
     targets = mock_load_targets.return_value
     args = Namespace(
         targets_file="targets.yaml",

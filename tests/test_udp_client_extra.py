@@ -171,9 +171,7 @@ async def test_send_one_retries_after_timeout():
     transport = mock.Mock()
     protocol.transport = transport
 
-    seq, rtt, retries, _ = await send_one(
-        protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 1, TokenBucketLimiter(0)
-    )
+    seq, rtt, retries, _ = await send_one(protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 1, TokenBucketLimiter(0))
 
     assert (seq, rtt, retries) == (1, None, 1)
     assert transport.sendto.call_count == 2
@@ -184,9 +182,7 @@ async def test_send_one_retries_after_timeout():
 async def test_send_one_returns_without_transport():
     protocol = BlitzClientProtocol()
 
-    seq, rtt, retries, scheduled = await send_one(
-        protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 1, TokenBucketLimiter(0)
-    )
+    seq, rtt, retries, scheduled = await send_one(protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 1, TokenBucketLimiter(0))
 
     assert (seq, rtt, retries) == (1, None, 0)
     assert scheduled > 0
@@ -203,9 +199,7 @@ async def test_send_one_does_not_cancel_future_already_completed_during_timeout(
     protocol = CompletedProtocol()
     protocol.transport = mock.Mock()
     with mock.patch("neural_blitz.udp_client.asyncio.wait_for", side_effect=asyncio.TimeoutError):
-        seq, rtt, retries, _ = await send_one(
-            protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 0, TokenBucketLimiter(0)
-        )
+        seq, rtt, retries, _ = await send_one(protocol, ("127.0.0.1", 9000), 1, 64, 0.001, 0, TokenBucketLimiter(0))
 
     assert (seq, rtt, retries) == (1, None, 0)
 

@@ -301,6 +301,13 @@ def test_module_entrypoint_exits_with_cli_status(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.unit
+def test_module_entrypoint_is_safe_to_import() -> None:
+    sys.modules.pop("neural_blitz.__main__", None)
+    module = importlib.import_module("neural_blitz.__main__")
+    assert module.main is not None
+
+
+@pytest.mark.unit
 def test_cli_safety_net_returns_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
     import neural_blitz.cli as cli_module
 

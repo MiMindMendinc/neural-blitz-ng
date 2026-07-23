@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import sys
+import builtins
+import importlib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -241,3 +243,47 @@ def test_pdf_report_wraps_document_write_error(tmp_path: Path, monkeypatch: pyte
 
     with pytest.raises(MetricsError, match="Unable to write PDF report"):
         report_pdf.write_pdf_report(LatencyStats(), TestConfig(), str(tmp_path / "report.pdf"))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("module_name", "blocked_prefix", "availability_name"),
+    [
+        ("neural_blitz.logging_setup", "rich", "RICH_AVAILABLE"),
+        ("neural_blitz.report_pdf", "reportlab", "PDF_REPORTS_AVAILABLE"),
+    ],
+)
+def test_optional_dependency_import_fallback(
+    monkeypatch: pytest.MonkeyPatch, module_name: str, blocked_prefix: str, availability_name: str
+) -> None:
+    module = importlib.import_module(module_name)
+    original_import = builtins.__import__
+
+    def blocked_import(name: str, *args: object, **kwargs: object) -> object:
+        if name.startswith(blocked_prefix):
+            raise ImportError(f"blocked {name}")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_import)
+    try:
+        module = importlib.reload(module)
+        assert getattr(module, availability_name) is False
+    finally:
+        monkeypatch.setattr(builtins, "__import__", original_import)
+        importlib.reload(module)
+
+
+@pytest.mark.unit
+def test_sla_load_rejects_non_mapping_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    import neural_blitz.sla as sla_module
+
+    monkeypatch.setattr(sla_module, "load_config", lambda _: {"sla": "invalid"})
+    with pytest.raises(Exception, match="mapping"):
+        sla_module.load_sla("ignored.yaml")
+
+
+@pytest.mark.unit
+def test_safety_environment_default_values_do_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NEURAL_BLITZ_MAX_COUNT", "1000000")
+    monkeypatch.setenv("NEURAL_BLITZ_MAX_RATE", "100000.0")
+    assert SafetyLimits.from_env().max_count == 1_000_000

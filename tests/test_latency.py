@@ -60,6 +60,13 @@ def test_latency_recorder_coordinated_omission():
 
 
 @pytest.mark.unit
+def test_latency_recorder_skips_correction_without_interval():
+    recorder = LatencyRecorder()
+    recorder.record_corrected(300.0, 0.0)
+    assert recorder.percentile(99, corrected=True) == recorder.percentile(99, corrected=False)
+
+
+@pytest.mark.unit
 def test_latency_recorder_empty_percentile():
     recorder = LatencyRecorder()
     assert recorder.percentile(50) == 0.0

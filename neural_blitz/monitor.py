@@ -135,10 +135,14 @@ def build_monitor_app(
 ) -> Any:
     from aiohttp import web
 
-    states = states if states is not None else {
-        label: TargetState(latest=stats, history=history.get(label, []), last_success_at=time.time())
-        for label, stats in latest.items()
-    }
+    states = (
+        states
+        if states is not None
+        else {
+            label: TargetState(latest=stats, history=history.get(label, []), last_success_at=time.time())
+            for label, stats in latest.items()
+        }
+    )
 
     @web.middleware
     async def authentication(request: web.Request, handler: Any) -> web.StreamResponse:

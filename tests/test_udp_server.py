@@ -1,6 +1,7 @@
 """UDP server integration tests."""
 
 import asyncio
+from unittest.mock import Mock
 
 import pytest
 
@@ -38,4 +39,17 @@ def test_echo_server_drops_invalid_datagrams():
     protocol = EchoServerProtocol(max_packet_size=64)
     protocol.datagram_received(b"invalid", ("127.0.0.1", 1234))
     assert protocol.packet_count == 0
+    assert protocol.dropped_packets == 1
+
+
+@pytest.mark.unit
+def test_echo_server_enforces_rate_limit_for_valid_packets():
+    transport = Mock()
+    protocol = EchoServerProtocol(rate_limit=1)
+    protocol.transport = transport
+    packet = build_packet(1, 64)
+    protocol.datagram_received(packet, ("127.0.0.1", 1234))
+    protocol.datagram_received(packet, ("127.0.0.1", 1234))
+    transport.sendto.assert_called_once_with(packet, ("127.0.0.1", 1234))
+    assert protocol.packet_count == 1
     assert protocol.dropped_packets == 1

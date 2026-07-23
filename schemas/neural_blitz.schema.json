@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MiMindMendinc/neural-blitz-ng/schemas/neural_blitz.schema.json",
+  "title": "Neural Blitz NG configuration",
+  "type": "object",
+  "properties": {
+    "config_version": { "const": 1 },
+    "defaults": { "$ref": "#/$defs/test" },
+    "test": { "$ref": "#/$defs/test" },
+    "server": {
+      "type": "object",
+      "properties": {
+        "bind": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "max_packet_size": { "type": "integer", "minimum": 25, "maximum": 65507 },
+        "rate_limit": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "monitor": {
+      "type": "object",
+      "properties": {
+        "bind": { "type": "string" },
+        "http_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "interval": { "type": "integer", "minimum": 1 },
+        "history_limit": { "type": "integer", "minimum": 1 },
+        "stale_after_seconds": { "type": "integer", "minimum": 1 },
+        "state_file": { "type": "string" },
+        "auth_token_file": { "type": "string" },
+        "health_requires_auth": { "type": "boolean" },
+        "tls_cert_file": { "type": "string" },
+        "tls_key_file": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/test" },
+          { "required": ["host"] }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "test": {
+      "type": "object",
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "count": { "type": "integer", "minimum": 1 },
+        "size": { "type": "integer", "minimum": 25, "maximum": 65507 },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "timeout": { "type": "number", "exclusiveMinimum": 0 },
+        "rate": { "type": "number", "minimum": 0 },
+        "max_retries": { "type": "integer", "minimum": 0 },
+        "warmup": { "type": "integer", "minimum": 0 },
+        "label": { "type": "string", "minLength": 1 },
+        "authorized_target": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

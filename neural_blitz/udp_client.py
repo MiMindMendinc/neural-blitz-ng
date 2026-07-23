@@ -36,10 +36,13 @@ def install_event_loop_policy() -> str:
 
 def resolve_host(host: str, port: int) -> tuple[str, int]:
     try:
-        socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)
     except socket.gaierror as exc:
         raise NeuralBlitzError(f"Unable to resolve host '{host}': {exc}") from exc
-    return host, port
+    if not addresses:
+        raise NeuralBlitzError(f"Unable to resolve host '{host}'")
+    sockaddr = addresses[0][4]
+    return str(sockaddr[0]), int(sockaddr[1])
 
 
 class BlitzClientProtocol(asyncio.DatagramProtocol):
@@ -80,6 +83,10 @@ class BlitzClientProtocol(asyncio.DatagramProtocol):
             return
         rtt_us = (recv_ns - send_ns) / 1_000.0
         self._completed.add(seq_id)
+        # A completed sequence is only useful while another retry can arrive.
+        # Keep the set bounded even when callers raise the configured count.
+        if len(self._completed) > 131_072:
+            self._completed.clear()
         future.set_result((rtt_us, recv_ns))
 
     def error_received(self, exc: Exception) -> None:
@@ -246,9 +253,10 @@ async def run_test(config: TestConfig, *, use_rich: bool = True) -> LatencyStats
     addr = resolve_host(config.host, config.port)
 
     try:
+        local_addr = ("::", 0) if ":" in addr[0] else ("0.0.0.0", 0)
         transport, protocol = await loop.create_datagram_endpoint(
             lambda: BlitzClientProtocol(config.socket_rcvbuf, config.socket_sndbuf),
-            local_addr=("0.0.0.0", 0),
+            local_addr=local_addr,
         )
     except OSError as exc:
         raise NeuralBlitzError(f"Unable to create UDP client endpoint: {exc}") from exc

@@ -42,3 +42,16 @@ async def test_monitor_http_endpoints():
 
         hist = await client.get("/api/target/local")
         assert len(await hist.json()) == 1
+
+
+@pytest.mark.integration
+async def test_monitor_bearer_auth_and_degraded_health():
+    latest = {"local": LatencyStats(label="local", success_rate=0.0)}
+    app = build_monitor_app(latest, {"local": []}, auth_token="secret")
+    async with TestClient(TestServer(app)) as client:
+        assert (await client.get("/metrics")).status == 401
+        assert (await client.get("/health")).status == 503
+        authorized = await client.get("/metrics", headers={"Authorization": "Bearer secret"})
+        assert authorized.status == 200
+        status = await client.get("/api/target/local/status", headers={"Authorization": "Bearer secret"})
+        assert (await status.json())["status"] in {"degraded", "ok"}

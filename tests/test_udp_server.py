@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from neural_blitz.udp_server import EchoServerProtocol
+from neural_blitz.latency import build_packet
 
 
 @pytest.mark.integration
@@ -23,10 +24,18 @@ async def test_echo_server_receives_packets():
 
     client_transport.close()
     client_transport, _ = await loop.create_datagram_endpoint(Client, local_addr=("127.0.0.1", 0))
-    payload = b"ping-test-payload-123456789012345"
+    payload = build_packet(1, 64)
     client_transport.sendto(payload, ("127.0.0.1", port))
     echoed = await asyncio.wait_for(received, timeout=2.0)
     assert echoed == payload
     assert protocol.packet_count >= 1
     client_transport.close()
     transport.close()
+
+
+@pytest.mark.unit
+def test_echo_server_drops_invalid_datagrams():
+    protocol = EchoServerProtocol(max_packet_size=64)
+    protocol.datagram_received(b"invalid", ("127.0.0.1", 1234))
+    assert protocol.packet_count == 0
+    assert protocol.dropped_packets == 1

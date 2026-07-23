@@ -1,0 +1,18 @@
+config_version: 1
+defaults:
+  count: 100
+  size: 64
+  concurrency: 10
+  timeout: 1.0
+  rate: 100
+  warmup: 10
+monitor:
+  bind: "0.0.0.0"
+  http_port: 8888
+  interval: 30
+  history_limit: 100
+  stale_after_seconds: 90
+targets:
+  - label: echo
+    host: echo-server
+    port: 9999

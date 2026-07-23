@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
+import json
 import logging
 import signal
+import ssl
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from neural_blitz.config import MonitorConfig, build_test_config_from_overrides, load_targets_file
@@ -20,6 +27,35 @@ from neural_blitz.udp_client import run_test
 logger = logging.getLogger("neural_blitz")
 
 
+@dataclass
+class TargetState:
+    """Runtime state that remains useful when a target temporarily fails."""
+
+    latest: LatencyStats | None = None
+    history: list[dict[str, Any]] = field(default_factory=list)
+    last_success_at: float | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
+
+    def status(self, stale_after_seconds: int, now: float | None = None) -> str:
+        now = time.time() if now is None else now
+        if self.last_success_at is None:
+            return "failed" if self.last_error else "never_run"
+        if now - self.last_success_at > stale_after_seconds:
+            return "stale"
+        if self.last_error or self.latest is None or self.latest.success_rate <= 0:
+            return "degraded"
+        return "ok"
+
+
+def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
+    destination = Path(path).expanduser()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(destination)
+
+
 async def run_batch_tests(
     config_data: dict[str, Any],
     targets_data: dict[str, Any],
@@ -27,6 +63,7 @@ async def run_batch_tests(
     metrics_output: str | None = None,
     pdf_dir: str | None = None,
     use_rich: bool = False,
+    failures: dict[str, str] | None = None,
 ) -> list[LatencyStats]:
     from pathlib import Path
 
@@ -73,6 +110,8 @@ async def run_batch_tests(
                 write_pdf_report(stats, batch_config, batch_config.pdf_report, sla_failures)
         except Exception as exc:
             logger.error("Target %s failed: %s", label, exc)
+            if failures is not None:
+                failures[str(label)] = str(exc)
     if metrics_output:
         import json
         from pathlib import Path
@@ -88,8 +127,28 @@ async def run_batch_tests(
 def build_monitor_app(
     latest: dict[str, LatencyStats],
     history: dict[str, list[dict[str, Any]]],
+    *,
+    states: dict[str, TargetState] | None = None,
+    stale_after_seconds: int = 60,
+    auth_token: str = "",
+    health_requires_auth: bool = False,
 ) -> Any:
     from aiohttp import web
+
+    states = states if states is not None else {
+        label: TargetState(latest=stats, history=history.get(label, []), last_success_at=time.time())
+        for label, stats in latest.items()
+    }
+
+    @web.middleware
+    async def authentication(request: web.Request, handler: Any) -> web.StreamResponse:
+        if not auth_token or (request.path == "/health" and not health_requires_auth):
+            return await handler(request)
+        provided = request.headers.get("Authorization", "")
+        expected = f"Bearer {auth_token}"
+        if not hmac.compare_digest(provided, expected):
+            return web.json_response({"error": "authentication required"}, status=401, headers={"WWW-Authenticate": "Bearer"})
+        return await handler(request)
 
     async def metrics_json(_: web.Request) -> web.Response:
         return web.json_response({label: stats.to_dict() for label, stats in latest.items()})
@@ -98,28 +157,50 @@ def build_monitor_app(
         return web.Response(text=format_prometheus_metrics(latest), content_type="text/plain; version=0.0.4")
 
     async def health(_: web.Request) -> web.Response:
+        statuses = {label: state.status(stale_after_seconds) for label, state in states.items()}
+        healthy = sum(1 for status in statuses.values() if status == "ok")
+        status = "ok" if statuses and healthy == len(statuses) else "degraded"
         return web.json_response(
             {
-                "status": "ok",
+                "status": status,
                 "version": __version__,
-                "targets": len(latest),
-                "healthy_targets": sum(1 for s in latest.values() if s.success_rate > 0),
-            }
+                "targets": len(states),
+                "healthy_targets": healthy,
+                "target_status": statuses,
+            },
+            status=200 if status == "ok" else 503,
         )
 
     async def api_targets(_: web.Request) -> web.Response:
-        return web.json_response(sorted(latest.keys()))
+        return web.json_response(sorted(states.keys()))
 
     async def api_target(request: web.Request) -> web.Response:
         label = request.match_info["label"]
-        return web.json_response(history.get(label, []))
+        state = states.get(label)
+        if state is None:
+            raise web.HTTPNotFound(text=json.dumps({"error": "unknown target"}), content_type="application/json")
+        return web.json_response(state.history)
 
-    app = web.Application()
+    async def api_target_status(request: web.Request) -> web.Response:
+        label = request.match_info["label"]
+        state = states.get(label)
+        if state is None:
+            raise web.HTTPNotFound(text=json.dumps({"error": "unknown target"}), content_type="application/json")
+        return web.json_response(
+            {
+                "status": state.status(stale_after_seconds),
+                "last_error": state.last_error,
+                "consecutive_failures": state.consecutive_failures,
+            }
+        )
+
+    app = web.Application(middlewares=[authentication])
     app.router.add_get("/metrics", metrics_json)
     app.router.add_get("/metrics/prometheus", metrics_prometheus)
     app.router.add_get("/health", health)
     app.router.add_get("/api/targets", api_targets)
     app.router.add_get("/api/target/{label}", api_target)
+    app.router.add_get("/api/target/{label}/status", api_target_status)
     return app
 
 
@@ -137,25 +218,79 @@ async def run_monitor_loop(
 
     latest: dict[str, LatencyStats] = {}
     history: dict[str, list[dict[str, Any]]] = {}
+    states: dict[str, TargetState] = {}
     shutdown = asyncio.Event()
+    auth_token = ""
+    if monitor_config.auth_token_file:
+        try:
+            auth_token = Path(monitor_config.auth_token_file).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise DependencyMissing(f"Unable to read monitor auth token file: {exc}") from exc
+        if not auth_token:
+            raise DependencyMissing("Monitor auth token file is empty")
 
     async def run_cycle() -> None:
         targets_data = load_targets_file(targets_file)
         targets_data.setdefault("test", {})
-        results = await run_batch_tests(config_data, targets_data, use_rich=use_rich)
+        cycle_failures: dict[str, str] = {}
+        results = await run_batch_tests(config_data, targets_data, use_rich=use_rich, failures=cycle_failures)
+        configured_labels = {
+            str(target.get("label") or target.get("name") or f"target-{index + 1}")
+            for index, target in enumerate(targets_data["targets"])
+            if isinstance(target, dict)
+        }
+        for label in configured_labels:
+            states.setdefault(label, TargetState())
+        for label, error in cycle_failures.items():
+            state = states.setdefault(label, TargetState())
+            state.last_error = error
+            state.consecutive_failures += 1
         for result in results:
             latest[result.label] = result
             hist = history.setdefault(result.label, [])
             hist.append(result.to_dict())
             if len(hist) > monitor_config.history_limit:
                 del hist[: len(hist) - monitor_config.history_limit]
+            state = states.setdefault(result.label, TargetState())
+            state.latest = result
+            state.history = hist
+            state.last_success_at = time.time()
+            state.last_error = None
+            state.consecutive_failures = 0
+        if monitor_config.state_file:
+            _atomic_json_write(
+                monitor_config.state_file,
+                {
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "targets": {
+                        label: {
+                            "status": state.status(monitor_config.stale_after_seconds),
+                            "last_error": state.last_error,
+                            "consecutive_failures": state.consecutive_failures,
+                            "latest": state.latest.to_dict() if state.latest else None,
+                        }
+                        for label, state in states.items()
+                    },
+                },
+            )
         logger.info("Monitor cycle complete: %d target(s)", len(results))
 
-    app = build_monitor_app(latest, history)
+    app = build_monitor_app(
+        latest,
+        history,
+        states=states,
+        stale_after_seconds=monitor_config.stale_after_seconds,
+        auth_token=auth_token,
+        health_requires_auth=monitor_config.health_requires_auth,
+    )
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, monitor_config.bind, monitor_config.http_port)
+    ssl_context: ssl.SSLContext | None = None
+    if monitor_config.tls_cert_file:
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(monitor_config.tls_cert_file, monitor_config.tls_key_file)
+    site = web.TCPSite(runner, monitor_config.bind, monitor_config.http_port, ssl_context=ssl_context)
     await site.start()
     logger.info("Monitor HTTP listening on %s:%d", monitor_config.bind, monitor_config.http_port)
 

@@ -14,6 +14,7 @@ from neural_blitz.config import (
     MonitorConfig,
     ServerConfig,
     TestConfig,
+    coerce_bool,
     default_test_values,
     get_config_section,
     load_config,
@@ -96,6 +97,8 @@ def build_parser() -> argparse.ArgumentParser:
     server = subparsers.add_parser("server", help="Run a UDP echo server")
     server.add_argument("--bind", default=None)
     server.add_argument("--port", "-p", type=int, default=None)
+    server.add_argument("--max-packet-size", type=int, default=None)
+    server.add_argument("--rate-limit", type=float, default=None, help="Maximum packets/sec per source; 0=unlimited")
     server.add_argument("--log-level", default=None, choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     batch = subparsers.add_parser("batch", help="Run tests for all targets in a YAML file")
@@ -189,6 +192,10 @@ def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -
         bind=str(args.bind if args.bind is not None else defaults["bind"]),
         port=int(args.port if args.port is not None else defaults["port"]),
         log_level=str(args.log_level if args.log_level is not None else defaults["log_level"]),
+        max_packet_size=int(
+            args.max_packet_size if args.max_packet_size is not None else defaults.get("max_packet_size", 65_507)
+        ),
+        rate_limit=float(args.rate_limit if args.rate_limit is not None else defaults.get("rate_limit", 0.0)),
     )
 
 
@@ -207,6 +214,12 @@ def build_monitor_config(args: argparse.Namespace, config_data: dict[str, Any]) 
         interval=int(cast(Any, args.interval if args.interval is not None else defaults["interval"])),
         history_limit=int(cast(Any, defaults.get("history_limit", 100))),
         log_level=str(args.log_level if args.log_level is not None else defaults["log_level"]),
+        stale_after_seconds=int(cast(Any, defaults.get("stale_after_seconds", 60))),
+        state_file=str(defaults.get("state_file", "")),
+        auth_token_file=str(defaults.get("auth_token_file", "")),
+        health_requires_auth=coerce_bool(defaults.get("health_requires_auth", False)),
+        tls_cert_file=str(defaults.get("tls_cert_file", "")),
+        tls_key_file=str(defaults.get("tls_key_file", "")),
     )
 
 
@@ -359,7 +372,14 @@ def execute_server(args: argparse.Namespace, config_data: dict[str, Any], use_ri
     configure_logging(config.log_level, use_rich)
     install_event_loop_policy()
     try:
-        asyncio.run(run_server(config.bind, config.port))
+        asyncio.run(
+            run_server(
+                config.bind,
+                config.port,
+                max_packet_size=config.max_packet_size,
+                rate_limit=config.rate_limit,
+            )
+        )
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
     return EXIT_SUCCESS

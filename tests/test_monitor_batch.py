@@ -38,3 +38,49 @@ async def test_batch_pdf_and_sla(mock_sla, mock_eval, mock_pdf, mock_run, tmp_pa
     data = load_targets_file(str(targets_file))
     await run_batch_tests({}, data)
     mock_pdf.assert_called_once()
+
+
+@pytest.mark.integration
+@mock.patch("neural_blitz.monitor.write_metrics")
+@mock.patch("neural_blitz.monitor.write_pdf_report")
+@mock.patch("neural_blitz.monitor.evaluate_sla", return_value=[])
+@mock.patch("neural_blitz.monitor.load_sla")
+@mock.patch("neural_blitz.monitor.run_test")
+async def test_batch_applies_sla_alias_and_per_target_outputs(
+    mock_run, mock_sla, mock_eval, mock_pdf, mock_metrics, tmp_path: Path
+):
+    stats = LatencyStats(label="local", success_rate=100.0, host="127.0.0.1", port=9999)
+    mock_run.return_value = stats
+
+    results = await run_batch_tests(
+        {},
+        {
+            "__base_dir": str(tmp_path),
+            "test": {"metrics_output": "target-metrics.json", "sla": "sla.yaml"},
+            "targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}],
+        },
+        pdf_dir=str(tmp_path / "reports"),
+    )
+
+    assert results == [stats]
+    mock_metrics.assert_called_once_with(stats, str(tmp_path / "target-metrics.json"))
+    mock_sla.assert_called_once_with(str(tmp_path / "sla.yaml"))
+    mock_eval.assert_called_once()
+    mock_pdf.assert_called_once()
+    assert mock_pdf.call_args.args[2] == str(tmp_path / "reports" / "local.pdf")
+
+
+@pytest.mark.integration
+@mock.patch("neural_blitz.monitor.write_pdf_report")
+@mock.patch("neural_blitz.monitor.run_test")
+async def test_batch_writes_pdf_without_sla_evaluation(mock_run, mock_pdf, tmp_path: Path):
+    stats = LatencyStats(label="local", success_rate=100.0, host="127.0.0.1", port=9999)
+    mock_run.return_value = stats
+
+    await run_batch_tests(
+        {},
+        {"targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}]},
+        pdf_dir=str(tmp_path / "reports"),
+    )
+
+    assert mock_pdf.call_args.args[3] is None

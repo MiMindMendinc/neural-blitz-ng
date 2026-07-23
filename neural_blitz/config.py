@@ -49,6 +49,8 @@ class ServerConfig:
     bind: str = "127.0.0.1"
     port: int = 9999
     log_level: str = "INFO"
+    max_packet_size: int = 65_507
+    rate_limit: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,12 @@ class MonitorConfig:
     interval: int = 30
     history_limit: int = 100
     log_level: str = "INFO"
+    stale_after_seconds: int = 60
+    state_file: str = ""
+    auth_token_file: str = ""
+    health_requires_auth: bool = False
+    tls_cert_file: str = ""
+    tls_key_file: str = ""
 
 
 def ensure_yaml_available() -> None:
@@ -202,6 +210,10 @@ def validate_test_config(config: TestConfig) -> None:
 def validate_server_config(config: ServerConfig) -> None:
     if config.port <= 0 or config.port > 65535:
         raise ConfigError("Port must be between 1 and 65535")
+    if config.max_packet_size < HEADER_SIZE or config.max_packet_size > 65_507:
+        raise ConfigError(f"Server max_packet_size must be between {HEADER_SIZE} and 65507")
+    if config.rate_limit < 0:
+        raise ConfigError("Server rate_limit cannot be negative")
 
 
 def validate_monitor_config(config: MonitorConfig) -> None:
@@ -211,6 +223,10 @@ def validate_monitor_config(config: MonitorConfig) -> None:
         raise ConfigError("Monitor interval must be greater than zero")
     if config.history_limit <= 0:
         raise ConfigError("Monitor history_limit must be greater than zero")
+    if config.stale_after_seconds <= 0:
+        raise ConfigError("Monitor stale_after_seconds must be greater than zero")
+    if bool(config.tls_cert_file) != bool(config.tls_key_file):
+        raise ConfigError("Monitor TLS requires both tls_cert_file and tls_key_file")
 
 
 def validate_config_file(path: str) -> list[str]:
@@ -219,6 +235,9 @@ def validate_config_file(path: str) -> list[str]:
         data = load_config(path)
     except ConfigError as exc:
         return [str(exc)]
+    version = data.get("config_version", 1)
+    if not isinstance(version, int) or version != 1:
+        errors.append("config_version must be 1")
     for section in ("defaults", "test", "server", "monitor", "sla"):
         value = data.get(section)
         if value is not None and not isinstance(value, dict):
@@ -258,6 +277,12 @@ def validate_config_file(path: str) -> list[str]:
                 interval=int(monitor_defaults["interval"]),
                 history_limit=int(monitor_defaults.get("history_limit", 100)),
                 log_level=str(monitor_defaults["log_level"]),
+                stale_after_seconds=int(monitor_defaults.get("stale_after_seconds", 60)),
+                state_file=str(monitor_defaults.get("state_file", "")),
+                auth_token_file=str(monitor_defaults.get("auth_token_file", "")),
+                health_requires_auth=coerce_bool(monitor_defaults.get("health_requires_auth", False)),
+                tls_cert_file=str(monitor_defaults.get("tls_cert_file", "")),
+                tls_key_file=str(monitor_defaults.get("tls_key_file", "")),
             )
         )
     except (ConfigError, TypeError, KeyError) as exc:
@@ -288,6 +313,7 @@ def write_sample_config(path: str = DEFAULT_CONFIG_BASENAME) -> None:
     destination = Path(path).expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
     sample = """# Neural Blitz NG example configuration
+config_version: 1
 defaults:
   count: 1000
   size: 64
@@ -303,6 +329,10 @@ monitor:
   http_port: 8888
   interval: 30
   history_limit: 100
+  stale_after_seconds: 60
+  # auth_token_file: /run/secrets/neural_blitz_monitor_token
+  # tls_cert_file: /run/secrets/tls.crt
+  # tls_key_file: /run/secrets/tls.key
 
 targets:
   - label: local

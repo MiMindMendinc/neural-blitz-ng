@@ -28,9 +28,21 @@ scrape_configs:
 | `neural_blitz_packets_received_total` | counter-like gauge | label, host, port |
 | `neural_blitz_packets_lost_total` | counter-like gauge | label, host, port |
 | `neural_blitz_target_up` | gauge | label, host, port |
-| `neural_blitz_last_run_timestamp` | info | label, host, port |
+| `neural_blitz_last_run_timestamp_seconds` | gauge | label, host, port |
 
 Cardinality is intentionally limited to `label`, `host`, and `port`.
+
+The endpoint emits Prometheus `HELP` and `TYPE` metadata and escapes all label
+values. `neural_blitz_last_run_timestamp_seconds` is a numeric Unix timestamp,
+so it can be used directly in PromQL.
+
+## Health and target state
+
+`/health` returns `200` only when every configured target is current and
+healthy. It returns `503` with per-target states (`ok`, `degraded`, `stale`,
+`failed`, or `never_run`) otherwise. Use `/api/target/{label}/status` for the
+last error and consecutive-failure count; the original history endpoint remains
+at `/api/target/{label}`.
 
 ## Grafana
 

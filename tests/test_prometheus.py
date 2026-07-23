@@ -29,3 +29,22 @@ def test_prometheus_metric_names():
     assert 'host="127.0.0.1"' in text
     assert 'port="9999"' in text
     assert "neural_blitz_target_up" in text
+    assert "# TYPE neural_blitz_success_rate_percent gauge" in text
+    assert "neural_blitz_last_run_timestamp_seconds" in text
+    assert '"202' not in text
+
+
+@pytest.mark.unit
+def test_prometheus_escapes_labels_and_timestamp_is_numeric():
+    stats = LatencyStats(label='a"b', host="host\\name", timestamp_utc="2026-01-01T00:00:00+00:00")
+    text = format_prometheus_metrics({'a"b': stats})
+    assert 'label="a\\"b"' in text
+    assert 'host="host\\\\name"' in text
+    assert "1767225600.000000" in text
+
+
+@pytest.mark.unit
+def test_prometheus_uses_zero_for_invalid_timestamp():
+    text = format_prometheus_metrics({"local": LatencyStats(timestamp_utc="not-a-date")})
+    assert "neural_blitz_last_run_timestamp_seconds" in text
+    assert " 0.000000" in text

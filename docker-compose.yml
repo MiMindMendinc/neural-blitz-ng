@@ -7,7 +7,7 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./examples/neural_blitz.yaml:/app/config/neural_blitz.yaml:ro
+      - ./examples/docker-neural_blitz.yaml:/app/config/neural_blitz.yaml:ro
       - ./examples/sla.yaml:/app/config/sla.yaml:ro
       - ./metrics:/app/metrics
       - ./reports:/app/reports
@@ -18,3 +18,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      echo-server:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  echo-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["neural-blitz", "server", "--bind", "0.0.0.0", "--port", "9999", "--rate-limit", "1000"]
+    expose:
+      - "9999/udp"
+    read_only: true
+    tmpfs:
+      - /tmp

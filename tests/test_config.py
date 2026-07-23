@@ -94,3 +94,16 @@ def test_normalize_test_values_coerces_bool_strings():
     )
     assert cfg.co_correction is True
     assert cfg.progress_enabled is False
+
+
+@pytest.mark.unit
+def test_monitor_tls_requires_certificate_and_key():
+    with pytest.raises(ConfigError, match="both"):
+        validate_monitor_config(MonitorConfig(tls_cert_file="/tmp/cert.pem"))
+
+
+@pytest.mark.unit
+def test_validate_config_rejects_unknown_config_version(tmp_path: Path):
+    cfg = tmp_path / "future.yaml"
+    cfg.write_text("config_version: 2\n", encoding="utf-8")
+    assert "config_version must be 1" in validate_config_file(str(cfg))

@@ -15,7 +15,7 @@ from neural_blitz.errors import ConfigError, MetricsError, SafetyViolation
 from neural_blitz.latency import LatencyRecorder
 from neural_blitz.metrics import LatencyStats, load_metrics, validate_metrics_output_path, write_metrics
 from neural_blitz.safety import SafetyLimits, is_private_or_loopback, validate_test_safety
-from neural_blitz.sla import load_sla, validate_sla_config
+from neural_blitz.sla import SLAConfig, load_sla, validate_sla_config
 
 
 @pytest.mark.parametrize(
@@ -76,7 +76,7 @@ def test_safety_enforces_remaining_limits(kwargs: dict[str, int], message: str) 
             timeout=1,
             rate=1,
             authorized_target=False,
-            limits=SafetyLimits(max_concurrency=1, max_packet_size=64),
+            limits=SafetyLimits(max_concurrency=1, max_packet_size=1 if "size" in kwargs else 64),
         )
 
 
@@ -129,4 +129,4 @@ def test_sla_validation_and_non_mapping_file(tmp_path: Path) -> None:
     path.write_text("not-a-mapping", encoding="utf-8")
     with pytest.raises(ConfigError):
         load_sla(str(path))
-    assert validate_sla_config({"max_loss_rate": 101, "max_p95_us": -1, "min_pps": -1})
+    assert validate_sla_config(SLAConfig(max_loss_rate=101, max_p95_us=-1, min_pps=-1))

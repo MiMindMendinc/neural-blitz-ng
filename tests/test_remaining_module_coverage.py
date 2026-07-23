@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
-import sys
 import builtins
 import importlib
+import logging
 import runpy
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock

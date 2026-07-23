@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from neural_blitz.compare import ComparisonThresholds, evaluate_comparison, write_comparison_output
-from neural_blitz.config import MonitorConfig, ServerConfig, TestConfig, validate_monitor_config, validate_server_config, validate_test_config
+from neural_blitz.config import (
+    MonitorConfig,
+    ServerConfig,
+    TestConfig,
+    validate_monitor_config,
+    validate_server_config,
+    validate_test_config,
+)
 from neural_blitz.constants import HEADER_SIZE
 from neural_blitz.errors import ConfigError, MetricsError, SafetyViolation
 from neural_blitz.latency import LatencyRecorder
@@ -104,9 +110,8 @@ def test_comparison_handles_zero_baseline_and_success_regression() -> None:
 
 
 def test_comparison_write_error_is_wrapped(tmp_path: Path) -> None:
-    with patch("neural_blitz.compare.os.replace", side_effect=OSError("denied")):
-        with pytest.raises(MetricsError):
-            write_comparison_output(str(tmp_path / "out.json"), {"ok": True})
+    with patch("neural_blitz.compare.os.replace", side_effect=OSError("denied")), pytest.raises(MetricsError):
+        write_comparison_output(str(tmp_path / "out.json"), {"ok": True})
 
 
 @pytest.mark.parametrize("contents", ["[]", "{bad"])
@@ -119,9 +124,8 @@ def test_metrics_load_rejects_invalid_documents(tmp_path: Path, contents: str) -
 
 def test_metrics_write_error_and_empty_output_path(tmp_path: Path) -> None:
     validate_metrics_output_path("")
-    with patch("neural_blitz.metrics._atomic_write_text", side_effect=OSError("denied")):
-        with pytest.raises(MetricsError):
-            write_metrics(LatencyStats(), str(tmp_path / "metrics.json"))
+    with patch("neural_blitz.metrics._atomic_write_text", side_effect=OSError("denied")), pytest.raises(MetricsError):
+        write_metrics(LatencyStats(), str(tmp_path / "metrics.json"))
 
 
 def test_sla_validation_and_non_mapping_file(tmp_path: Path) -> None:

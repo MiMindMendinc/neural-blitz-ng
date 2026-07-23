@@ -193,9 +193,15 @@ def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -
         port=int(args.port if args.port is not None else defaults["port"]),
         log_level=str(args.log_level if args.log_level is not None else defaults["log_level"]),
         max_packet_size=int(
-            args.max_packet_size if args.max_packet_size is not None else defaults.get("max_packet_size", 65_507)
+            getattr(args, "max_packet_size", None)
+            if getattr(args, "max_packet_size", None) is not None
+            else defaults.get("max_packet_size", 65_507)
         ),
-        rate_limit=float(args.rate_limit if args.rate_limit is not None else defaults.get("rate_limit", 0.0)),
+        rate_limit=float(
+            getattr(args, "rate_limit", None)
+            if getattr(args, "rate_limit", None) is not None
+            else defaults.get("rate_limit", 0.0)
+        ),
     )
 
 

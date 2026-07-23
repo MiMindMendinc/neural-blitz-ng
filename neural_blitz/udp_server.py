@@ -36,8 +36,6 @@ class EchoServerProtocol(asyncio.DatagramProtocol):
         logger.info("Echo server listening on %s", transport.get_extra_info("sockname"))
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
-        if self.transport is None:
-            return
         if len(data) < HEADER_SIZE or len(data) > self.max_packet_size:
             self.dropped_packets += 1
             return
@@ -48,6 +46,8 @@ class EchoServerProtocol(asyncio.DatagramProtocol):
             return
         if self.rate_limit and not self._allow(addr[0]):
             self.dropped_packets += 1
+            return
+        if self.transport is None:
             return
         self.packet_count += 1
         self.transport.sendto(data, addr)

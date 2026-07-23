@@ -4,7 +4,7 @@ import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from neural_blitz.metrics import LatencyStats
-from neural_blitz.monitor import build_monitor_app
+from neural_blitz.monitor import TargetState, build_monitor_app
 
 
 @pytest.mark.integration
@@ -55,3 +55,17 @@ async def test_monitor_bearer_auth_and_degraded_health():
         assert authorized.status == 200
         status = await client.get("/api/target/local/status", headers={"Authorization": "Bearer secret"})
         assert (await status.json())["status"] in {"degraded", "ok"}
+
+
+@pytest.mark.unit
+def test_target_state_transitions():
+    state = TargetState()
+    assert state.status(60, now=100.0) == "never_run"
+    state.last_error = "timeout"
+    assert state.status(60, now=100.0) == "failed"
+    state.latest = LatencyStats(success_rate=100.0)
+    state.last_success_at = 100.0
+    assert state.status(60, now=101.0) == "degraded"
+    state.last_error = None
+    assert state.status(60, now=101.0) == "ok"
+    assert state.status(60, now=161.0) == "stale"

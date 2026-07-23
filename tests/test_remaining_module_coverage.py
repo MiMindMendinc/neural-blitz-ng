@@ -35,13 +35,17 @@ def test_configure_logging_rich_uses_rich_handler(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(logging_setup, "RichHandler", FakeRichHandler)
     monkeypatch.setattr(logging_setup, "error_console", fake_console)
 
-    logging_setup.configure_logging("warning", use_rich=True)
-
-    handler = logging.getLogger().handlers[0]
-    assert isinstance(handler, FakeRichHandler)
-    assert handler.kwargs["console"] is fake_console
-    assert handler.formatter is not None
-    assert handler.formatter._style._fmt == "%(message)s"
+    root = logging.getLogger()
+    original_handlers = root.handlers[:]
+    try:
+        logging_setup.configure_logging("warning", use_rich=True)
+        handler = root.handlers[0]
+        assert isinstance(handler, FakeRichHandler)
+        assert handler.kwargs["console"] is fake_console
+        assert handler.formatter is not None
+        assert handler.formatter._style._fmt == "%(message)s"
+    finally:
+        root.handlers = original_handlers
 
 
 @pytest.mark.unit

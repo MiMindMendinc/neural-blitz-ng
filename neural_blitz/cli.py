@@ -538,7 +538,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         emit_error("Interrupted", use_rich=RICH_AVAILABLE)
         return EXIT_INTERRUPTED
-    except Exception as exc:  # pragma: no cover - safety net
+    except Exception as exc:
         import logging
 
         logging.getLogger("neural_blitz").exception("Unexpected error")

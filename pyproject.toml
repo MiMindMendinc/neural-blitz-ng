@@ -71,10 +71,9 @@ addopts = "-ra --strict-markers"
 [tool.coverage.run]
 branch = true
 source = ["neural_blitz"]
-omit = ["neural_blitz/__main__.py"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 100
 show_missing = true
 skip_covered = false
 

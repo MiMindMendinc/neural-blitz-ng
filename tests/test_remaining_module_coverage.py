@@ -6,6 +6,7 @@ import logging
 import sys
 import builtins
 import importlib
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -287,3 +288,24 @@ def test_safety_environment_default_values_do_not_warn(monkeypatch: pytest.Monke
     monkeypatch.setenv("NEURAL_BLITZ_MAX_COUNT", "1000000")
     monkeypatch.setenv("NEURAL_BLITZ_MAX_RATE", "100000.0")
     assert SafetyLimits.from_env().max_count == 1_000_000
+
+
+@pytest.mark.unit
+def test_module_entrypoint_exits_with_cli_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    import neural_blitz.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "main", lambda: 0)
+    with pytest.raises(SystemExit) as exited:
+        runpy.run_module("neural_blitz.__main__", run_name="__main__")
+    assert exited.value.code == 0
+
+
+@pytest.mark.unit
+def test_cli_safety_net_returns_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    import neural_blitz.cli as cli_module
+
+    parser = Mock()
+    parser.parse_args.return_value = SimpleNamespace(command="version", config=None, no_rich=True, json=False)
+    monkeypatch.setattr(cli_module, "build_parser", lambda: parser)
+    monkeypatch.setattr(cli_module, "execute_version", Mock(side_effect=RuntimeError("unexpected")))
+    assert cli_module.main([]) == 1

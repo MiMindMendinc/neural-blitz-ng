@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from neural_blitz.udp_server import EchoServerProtocol
 from neural_blitz.latency import build_packet
+from neural_blitz.udp_server import EchoServerProtocol
 
 
 @pytest.mark.integration

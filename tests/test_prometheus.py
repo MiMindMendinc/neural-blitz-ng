@@ -41,3 +41,10 @@ def test_prometheus_escapes_labels_and_timestamp_is_numeric():
     assert 'label="a\\"b"' in text
     assert 'host="host\\\\name"' in text
     assert "1767225600.000000" in text
+
+
+@pytest.mark.unit
+def test_prometheus_uses_zero_for_invalid_timestamp():
+    text = format_prometheus_metrics({"local": LatencyStats(timestamp_utc="not-a-date")})
+    assert "neural_blitz_last_run_timestamp_seconds" in text
+    assert " 0.000000" in text

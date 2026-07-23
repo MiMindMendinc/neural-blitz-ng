@@ -147,7 +147,11 @@ def build_monitor_app(
         provided = request.headers.get("Authorization", "")
         expected = f"Bearer {auth_token}"
         if not hmac.compare_digest(provided, expected):
-            return web.json_response({"error": "authentication required"}, status=401, headers={"WWW-Authenticate": "Bearer"})
+            return web.json_response(
+                {"error": "authentication required"},
+                status=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return await handler(request)
 
     async def metrics_json(_: web.Request) -> web.Response:

@@ -35,6 +35,7 @@ def format_prometheus_metrics(latest: dict[str, LatencyStats]) -> str:
         host = stats.host or "unknown"
         port = str(stats.port or 0)
         common = f'label="{_escape_label(label)}",host="{_escape_label(host)}",port="{_escape_label(port)}"'
+        target_up = f"neural_blitz_target_up{{{common}}} {1 if stats.success_rate > 0 else 0}"
         lines.extend(
             [
                 f"neural_blitz_success_rate_percent{{{common}}} {stats.success_rate:.6f}",
@@ -46,8 +47,7 @@ def format_prometheus_metrics(latest: dict[str, LatencyStats]) -> str:
                 f"neural_blitz_packets_sent_total{{{common}}} {stats.count_sent}",
                 f"neural_blitz_packets_received_total{{{common}}} {stats.count_received}",
                 f"neural_blitz_packets_lost_total{{{common}}} {stats.count_lost}",
-                f'neural_blitz_target_up{{label="{_escape_label(label)}",host="{_escape_label(host)}",port="{_escape_label(port)}"}} '
-                f"{1 if stats.success_rate > 0 else 0}",
+                target_up,
                 f"neural_blitz_last_run_timestamp_seconds{{{common}}} {_timestamp_seconds(stats.timestamp_utc):.6f}",
             ]
         )

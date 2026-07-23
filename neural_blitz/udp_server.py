@@ -68,7 +68,11 @@ class EchoServerProtocol(asyncio.DatagramProtocol):
     def connection_lost(self, exc: Exception | None) -> None:
         if exc:
             logger.error("Echo server connection lost: %s", exc)
-        logger.info("Echo server shut down after %d packets; dropped %d invalid or rate-limited packets", self.packet_count, self.dropped_packets)
+        logger.info(
+            "Echo server shut down after %d packets; dropped %d invalid or rate-limited packets",
+            self.packet_count,
+            self.dropped_packets,
+        )
 
 
 async def run_server(

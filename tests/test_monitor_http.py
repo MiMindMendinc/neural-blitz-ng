@@ -57,6 +57,16 @@ async def test_monitor_bearer_auth_and_degraded_health():
         assert (await status.json())["status"] in {"degraded", "ok"}
 
 
+@pytest.mark.integration
+async def test_monitor_http_returns_json_404_for_unknown_target_endpoints():
+    app = build_monitor_app({}, {}, states={"failed": TargetState(last_error="timeout")})
+    async with TestClient(TestServer(app)) as client:
+        for endpoint in ("/api/target/missing", "/api/target/missing/status"):
+            response = await client.get(endpoint)
+            assert response.status == 404
+            assert await response.json() == {"error": "unknown target"}
+
+
 @pytest.mark.unit
 def test_target_state_transitions():
     state = TargetState()
@@ -69,3 +79,17 @@ def test_target_state_transitions():
     state.last_error = None
     assert state.status(60, now=101.0) == "ok"
     assert state.status(60, now=161.0) == "stale"
+
+
+@pytest.mark.unit
+def test_target_state_failure_statuses_without_successful_result():
+    failed = TargetState(last_error="timed out", consecutive_failures=2)
+    degraded = TargetState(
+        latest=LatencyStats(success_rate=0.0),
+        last_success_at=100.0,
+        last_error="packet loss",
+        consecutive_failures=1,
+    )
+
+    assert failed.status(60, now=100.0) == "failed"
+    assert degraded.status(60, now=101.0) == "degraded"

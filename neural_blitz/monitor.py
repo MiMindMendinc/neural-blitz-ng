@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from neural_blitz.config import MonitorConfig, build_test_config_from_overrides, load_targets_file
 from neural_blitz.constants import __version__
@@ -147,7 +147,7 @@ def build_monitor_app(
     @web.middleware
     async def authentication(request: web.Request, handler: Any) -> web.StreamResponse:
         if not auth_token or (request.path == "/health" and not health_requires_auth):
-            return await handler(request)
+            return cast(web.StreamResponse, await handler(request))
         provided = request.headers.get("Authorization", "")
         expected = f"Bearer {auth_token}"
         if not hmac.compare_digest(provided, expected):
@@ -156,7 +156,7 @@ def build_monitor_app(
                 status=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return await handler(request)
+        return cast(web.StreamResponse, await handler(request))
 
     async def metrics_json(_: web.Request) -> web.Response:
         return web.json_response({label: stats.to_dict() for label, stats in latest.items()})

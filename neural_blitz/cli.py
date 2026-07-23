@@ -188,20 +188,16 @@ def build_test_config(args: argparse.Namespace, config_data: dict[str, Any]) -> 
 def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -> ServerConfig:
     defaults: dict[str, Any] = {"bind": "127.0.0.1", "port": 9999, "log_level": "INFO"}
     defaults.update(get_config_section(config_data, "server"))
+    max_packet_size = getattr(args, "max_packet_size", None)
+    rate_limit = getattr(args, "rate_limit", None)
     return ServerConfig(
         bind=str(args.bind if args.bind is not None else defaults["bind"]),
         port=int(args.port if args.port is not None else defaults["port"]),
         log_level=str(args.log_level if args.log_level is not None else defaults["log_level"]),
         max_packet_size=int(
-            getattr(args, "max_packet_size", None)
-            if getattr(args, "max_packet_size", None) is not None
-            else defaults.get("max_packet_size", 65_507)
+            cast(int, max_packet_size if max_packet_size is not None else defaults.get("max_packet_size", 65_507))
         ),
-        rate_limit=float(
-            getattr(args, "rate_limit", None)
-            if getattr(args, "rate_limit", None) is not None
-            else defaults.get("rate_limit", 0.0)
-        ),
+        rate_limit=float(cast(float, rate_limit if rate_limit is not None else defaults.get("rate_limit", 0.0))),
     )
 
 

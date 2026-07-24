@@ -48,9 +48,35 @@ def test_monitor_initialization_rejects_invalid_target() -> None:
         _initialize_target_states({}, {"targets": ["invalid"]}, {})
 
 
+def test_monitor_initialization_rejects_invalid_shared_overrides() -> None:
+    with pytest.raises(ConfigError, match="test"):
+        _initialize_target_states({}, {"test": "invalid", "targets": []}, {})
+
+
 def test_unlimited_server_does_not_track_clients() -> None:
     protocol = EchoServerProtocol(rate_limit=0)
     assert protocol._clients == {}
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"max_tracked_clients": 0},
+        {"client_state_ttl": 0},
+        {"cleanup_interval": 0},
+    ],
+)
+def test_server_constructor_rejects_invalid_client_state_options(kwargs: dict[str, float]) -> None:
+    with pytest.raises(ValueError):
+        EchoServerProtocol(**kwargs)  # type: ignore[arg-type]
+
+
+def test_server_removes_expired_client_without_full_cleanup() -> None:
+    now = [0.0]
+    protocol = EchoServerProtocol(rate_limit=1, client_state_ttl=1, cleanup_interval=100, clock=lambda: now[0])
+    assert protocol._allow("host")
+    now[0] = 2.0
+    assert protocol._allow("host")
 
 
 def test_resolver_rejects_non_ip_udp_records(monkeypatch: pytest.MonkeyPatch) -> None:

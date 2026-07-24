@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from neural_blitz.config import ServerConfig, validate_server_config
+from neural_blitz.config import ServerConfig, TestConfig, validate_server_config
 from neural_blitz.errors import ConfigError, NeuralBlitzError
 from neural_blitz.monitor import _atomic_json_write, _initialize_target_states
-from neural_blitz.udp_client import resolve_hosts
+from neural_blitz.udp_client import resolve_hosts, run_test
 from neural_blitz.udp_server import EchoServerProtocol
 
 
@@ -90,3 +91,38 @@ def test_resolver_rejects_non_ip_udp_records(monkeypatch: pytest.MonkeyPatch) ->
     )
     with pytest.raises(NeuralBlitzError, match="IPv4 or IPv6"):
         resolve_hosts("example", 9999)
+
+
+def test_validate_config_reports_schema_load_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import neural_blitz.config as config_module
+
+    config = tmp_path / "config.yaml"
+    config.write_text("{}", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def fail_schema_read(path: Path, *args: object, **kwargs: object) -> str:
+        if path.name == "neural_blitz.schema.json":
+            raise OSError("unreadable")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_schema_read)
+    assert any(
+        "Unable to load configuration schema" in error for error in config_module.validate_config_file(str(config))
+    )
+
+
+@pytest.mark.asyncio
+async def test_client_reports_all_failed_resolved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    import socket
+    import neural_blitz.udp_client as client
+
+    monkeypatch.setattr(
+        client,
+        "resolve_hosts",
+        lambda *_: [(socket.AF_INET, ("127.0.0.1", 9999)), (socket.AF_INET, ("127.0.0.2", 9999))],
+    )
+    loop = asyncio.get_running_loop()
+    with patch.object(loop, "create_datagram_endpoint", side_effect=OSError("blocked")):
+        with pytest.raises(NeuralBlitzError, match="Unable to reach UDP host"):
+            await run_test(TestConfig(host="127.0.0.1"))

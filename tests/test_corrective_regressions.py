@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import socket
 from pathlib import Path
 from unittest.mock import patch
 
@@ -81,7 +83,6 @@ def test_server_removes_expired_client_without_full_cleanup() -> None:
 
 
 def test_resolver_rejects_non_ip_udp_records(monkeypatch: pytest.MonkeyPatch) -> None:
-    import socket
     import neural_blitz.udp_client as udp_client
 
     monkeypatch.setattr(
@@ -113,8 +114,6 @@ def test_validate_config_reports_schema_load_failures(tmp_path: Path, monkeypatc
 
 @pytest.mark.asyncio
 async def test_client_reports_all_failed_resolved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-    import socket
     import neural_blitz.udp_client as client
 
     monkeypatch.setattr(
@@ -123,6 +122,8 @@ async def test_client_reports_all_failed_resolved_addresses(monkeypatch: pytest.
         lambda *_: [(socket.AF_INET, ("127.0.0.1", 9999)), (socket.AF_INET, ("127.0.0.2", 9999))],
     )
     loop = asyncio.get_running_loop()
-    with patch.object(loop, "create_datagram_endpoint", side_effect=OSError("blocked")):
-        with pytest.raises(NeuralBlitzError, match="Unable to reach UDP host"):
-            await run_test(TestConfig(host="127.0.0.1"))
+    with (
+        patch.object(loop, "create_datagram_endpoint", side_effect=OSError("blocked")),
+        pytest.raises(NeuralBlitzError, match="Unable to reach UDP host"),
+    ):
+        await run_test(TestConfig(host="127.0.0.1"))

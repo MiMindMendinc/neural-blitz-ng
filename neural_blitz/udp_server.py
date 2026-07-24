@@ -109,9 +109,7 @@ class EchoServerProtocol(asyncio.DatagramProtocol):
         return True
 
     def _cleanup_clients(self, now: float) -> None:
-        self._clients = {
-            host: state for host, state in self._clients.items() if now - state[1] < self.client_state_ttl
-        }
+        self._clients = {host: state for host, state in self._clients.items() if now - state[1] < self.client_state_ttl}
         self._last_cleanup = now
 
     def _evict_client(self) -> None:

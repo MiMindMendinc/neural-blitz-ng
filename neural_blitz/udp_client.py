@@ -308,9 +308,9 @@ async def run_test(config: TestConfig, *, use_rich: bool = True) -> LatencyStats
         break
     if transport is None or protocol is None:
         if len(addresses) == 1 and endpoint_errors:
-            raise NeuralBlitzError(
-                f"Unable to create UDP client endpoint: {endpoint_errors[0]}"
-            ) from endpoint_errors[0]
+            raise NeuralBlitzError(f"Unable to create UDP client endpoint: {endpoint_errors[0]}") from endpoint_errors[
+                0
+            ]
         detail = "; ".join(attempts) or "no usable UDP addresses"
         raise NeuralBlitzError(f"Unable to reach UDP host '{config.host}:{config.port}': {detail}")
 

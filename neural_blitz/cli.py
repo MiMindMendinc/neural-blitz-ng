@@ -99,9 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     server.add_argument("--port", "-p", type=int, default=None)
     server.add_argument("--max-packet-size", type=int, default=None)
     server.add_argument("--rate-limit", type=float, default=None, help="Maximum packets/sec per source; 0=unlimited")
-    server.add_argument(
-        "--max-tracked-clients", type=int, default=None, help="Maximum retained rate-limit clients"
-    )
+    server.add_argument("--max-tracked-clients", type=int, default=None, help="Maximum retained rate-limit clients")
     server.add_argument("--client-state-ttl", type=float, default=None, help="Idle token-state expiry in seconds")
     server.add_argument(
         "--cleanup-interval", type=float, default=None, help="Expired-state cleanup interval in seconds"

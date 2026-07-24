@@ -107,3 +107,11 @@ def test_validate_config_rejects_unknown_config_version(tmp_path: Path):
     cfg = tmp_path / "future.yaml"
     cfg.write_text("config_version: 2\n", encoding="utf-8")
     assert "config_version must be 1" in validate_config_file(str(cfg))
+
+
+@pytest.mark.unit
+def test_validate_config_validates_server_values(tmp_path: Path):
+    cfg = tmp_path / "bad-server.yaml"
+    cfg.write_text("server:\n  port: 70000\n", encoding="utf-8")
+    errors = validate_config_file(str(cfg))
+    assert any(error.startswith("server config: Port must") for error in errors)

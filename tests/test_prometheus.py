@@ -3,7 +3,7 @@
 import pytest
 
 from neural_blitz.metrics import LatencyStats
-from neural_blitz.prometheus import format_prometheus_metrics
+from neural_blitz.prometheus import METRIC_DESCRIPTORS, format_prometheus_metrics
 
 
 @pytest.mark.unit
@@ -32,6 +32,21 @@ def test_prometheus_metric_names():
     assert "# TYPE neural_blitz_success_rate_percent gauge" in text
     assert "neural_blitz_last_run_timestamp_seconds" in text
     assert '"202' not in text
+    for descriptor in METRIC_DESCRIPTORS:
+        assert text.count(f"# HELP {descriptor.name} ") == 1
+        assert text.count(f"# TYPE {descriptor.name} {descriptor.metric_type}") == 1
+        assert text.count(f"{descriptor.name}{{") == 1
+
+
+@pytest.mark.unit
+def test_prometheus_snapshot_packet_counts_are_gauges():
+    text = format_prometheus_metrics({"local": LatencyStats(count_sent=10, count_received=8, count_lost=2)})
+    for name in (
+        "neural_blitz_packets_sent_total",
+        "neural_blitz_packets_received_total",
+        "neural_blitz_packets_lost_total",
+    ):
+        assert f"# TYPE {name} gauge" in text
 
 
 @pytest.mark.unit

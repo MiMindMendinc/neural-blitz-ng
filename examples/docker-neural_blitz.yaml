@@ -16,3 +16,6 @@ targets:
   - label: echo
     host: echo-server
     port: 9999
+    # Docker service names are not private IP literals; this confirms the
+    # operator authorizes traffic to the compose-managed echo server.
+    authorized_target: true

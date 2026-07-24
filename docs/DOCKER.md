@@ -22,7 +22,7 @@ Endpoints:
 
 | Mount | Purpose |
 | ----- | ------- |
-| `./examples/neural_blitz.yaml` | Read-only config |
+| `./examples/docker-neural_blitz.yaml` | Read-only compose config |
 | `./metrics` | Exported metrics |
 | `./reports` | PDF reports |
 
@@ -30,4 +30,7 @@ Endpoints:
 
 - Container runs as non-root user `neuralblitz`
 - Healthcheck probes `/health`
+- The compose example targets its `echo-server` service and sets
+  `authorized_target: true`; retain this only for targets you own or are
+  explicitly authorized to measure.
 - Default targets are localhost — update config deliberately for real deployments

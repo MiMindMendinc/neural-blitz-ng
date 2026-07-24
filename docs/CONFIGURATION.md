@@ -42,6 +42,12 @@ neural-blitz validate-config examples/neural_blitz.yaml
 neural-blitz validate-sla examples/sla.yaml
 ```
 
+`validate-config` applies the bundled strict JSON Schema and runtime
+validation. Unknown keys are rejected. The schema covers every `test`,
+`server`, and `monitor` setting, including test output/buffer/progress and
+authorization fields; server packet/rate/client-state fields; and monitor
+authentication, TLS, staleness, and persistence fields.
+
 ## CLI overrides
 
 Any test flag overrides YAML values. Use `--config` to load a base file.

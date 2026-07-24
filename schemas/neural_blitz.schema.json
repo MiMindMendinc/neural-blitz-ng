@@ -7,44 +7,22 @@
     "config_version": { "const": 1 },
     "defaults": { "$ref": "#/$defs/test" },
     "test": { "$ref": "#/$defs/test" },
-    "server": {
-      "type": "object",
-      "properties": {
-        "bind": { "type": "string" },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "max_packet_size": { "type": "integer", "minimum": 25, "maximum": 65507 },
-        "rate_limit": { "type": "number", "minimum": 0 }
-      },
-      "additionalProperties": false
-    },
-    "monitor": {
-      "type": "object",
-      "properties": {
-        "bind": { "type": "string" },
-        "http_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "interval": { "type": "integer", "minimum": 1 },
-        "history_limit": { "type": "integer", "minimum": 1 },
-        "stale_after_seconds": { "type": "integer", "minimum": 1 },
-        "state_file": { "type": "string" },
-        "auth_token_file": { "type": "string" },
-        "health_requires_auth": { "type": "boolean" },
-        "tls_cert_file": { "type": "string" },
-        "tls_key_file": { "type": "string" }
-      },
-      "additionalProperties": false
-    },
+    "server": { "$ref": "#/$defs/server" },
+    "monitor": { "$ref": "#/$defs/monitor" },
     "targets": {
       "type": "array",
-      "items": {
-        "allOf": [
-          { "$ref": "#/$defs/test" },
-          { "required": ["host"] }
-        ]
-      }
-    }
+      "items": { "$ref": "#/$defs/target" }
+    },
+    "sla": { "$ref": "#/$defs/sla" }
   },
+  "additionalProperties": false,
   "$defs": {
     "test": {
+      "type": "object",
+      "$ref": "#/$defs/test_properties",
+      "unevaluatedProperties": false
+    },
+    "test_properties": {
       "type": "object",
       "properties": {
         "host": { "type": "string" },
@@ -56,10 +34,75 @@
         "rate": { "type": "number", "minimum": 0 },
         "max_retries": { "type": "integer", "minimum": 0 },
         "warmup": { "type": "integer", "minimum": 0 },
-        "label": { "type": "string", "minLength": 1 },
+        "metrics_output": { "type": "string" },
+        "log_level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+        "socket_rcvbuf": { "type": "integer", "minimum": 1 },
+        "socket_sndbuf": { "type": "integer", "minimum": 1 },
+        "co_correction": { "type": "boolean" },
+        "progress_interval": { "type": "number", "exclusiveMinimum": 0 },
+        "progress_enabled": { "type": "boolean" },
+        "label": { "type": "string" },
+        "sla_path": { "type": "string" },
+        "fail_on_sla": { "type": "boolean" },
+        "pdf_report": { "type": "string" },
         "authorized_target": { "type": "boolean" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "$ref": "#/$defs/test_properties",
+      "properties": {
+        "name": { "type": "string" },
+        "sla": { "type": "string" }
       },
-      "additionalProperties": true
+      "required": ["host"],
+      "unevaluatedProperties": false
+    },
+    "server": {
+      "type": "object",
+      "properties": {
+        "bind": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "log_level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+        "max_packet_size": { "type": "integer", "minimum": 25, "maximum": 65507 },
+        "rate_limit": { "type": "number", "minimum": 0 },
+        "max_tracked_clients": { "type": "integer", "minimum": 1 },
+        "client_state_ttl": { "type": "number", "exclusiveMinimum": 0 },
+        "cleanup_interval": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "monitor": {
+      "type": "object",
+      "properties": {
+        "bind": { "type": "string" },
+        "http_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "interval": { "type": "integer", "minimum": 1 },
+        "history_limit": { "type": "integer", "minimum": 1 },
+        "log_level": { "type": "string", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+        "stale_after_seconds": { "type": "integer", "minimum": 1 },
+        "state_file": { "type": "string" },
+        "auth_token_file": { "type": "string" },
+        "health_requires_auth": { "type": "boolean" },
+        "tls_cert_file": { "type": "string" },
+        "tls_key_file": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "sla": {
+      "type": "object",
+      "properties": {
+        "min_success_rate": { "type": "number", "minimum": 0, "maximum": 100 },
+        "max_loss_rate": { "type": "number", "minimum": 0, "maximum": 100 },
+        "max_mean_us": { "type": "number", "minimum": 0 },
+        "max_p95_us": { "type": "number", "minimum": 0 },
+        "max_p99_us": { "type": "number", "minimum": 0 },
+        "max_p999_us": { "type": "number", "minimum": 0 },
+        "max_co_p99_us": { "type": "number", "minimum": 0 },
+        "max_jitter_us": { "type": "number", "minimum": 0 },
+        "min_pps": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
     }
   }
 }

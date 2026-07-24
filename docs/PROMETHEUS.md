@@ -24,9 +24,9 @@ scrape_configs:
 | `neural_blitz_latency_p95_us` | gauge | label, host, port |
 | `neural_blitz_latency_p99_us` | gauge | label, host, port |
 | `neural_blitz_jitter_us` | gauge | label, host, port |
-| `neural_blitz_packets_sent_total` | counter-like gauge | label, host, port |
-| `neural_blitz_packets_received_total` | counter-like gauge | label, host, port |
-| `neural_blitz_packets_lost_total` | counter-like gauge | label, host, port |
+| `neural_blitz_packets_sent_total` | gauge | label, host, port |
+| `neural_blitz_packets_received_total` | gauge | label, host, port |
+| `neural_blitz_packets_lost_total` | gauge | label, host, port |
 | `neural_blitz_target_up` | gauge | label, host, port |
 | `neural_blitz_last_run_timestamp_seconds` | gauge | label, host, port |
 
@@ -35,6 +35,10 @@ Cardinality is intentionally limited to `label`, `host`, and `port`.
 The endpoint emits Prometheus `HELP` and `TYPE` metadata and escapes all label
 values. `neural_blitz_last_run_timestamp_seconds` is a numeric Unix timestamp,
 so it can be used directly in PromQL.
+
+Packet counts are snapshots from the latest completed run, so they are gauges
+rather than process-lifetime counters. Their established `_total` names remain
+for dashboard compatibility; do not use `rate()` or `increase()` with them.
 
 ## Health and target state
 

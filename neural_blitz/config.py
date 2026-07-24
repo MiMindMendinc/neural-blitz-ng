@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 
 from neural_blitz.constants import DEFAULT_CONFIG_BASENAME, HEADER_SIZE
 from neural_blitz.errors import ConfigError, DependencyMissing
@@ -244,6 +248,15 @@ def validate_config_file(path: str) -> list[str]:
         data = load_config(path)
     except ConfigError as exc:
         return [str(exc)]
+    try:
+        schema_path = Path(__file__).resolve().parent.parent / "schemas" / "neural_blitz.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        for error in sorted(validator.iter_errors(data), key=lambda item: list(item.absolute_path)):
+            location = ".".join(str(part) for part in error.absolute_path) or "config"
+            errors.append(f"schema {location}: {error.message}")
+    except (OSError, json.JSONDecodeError, SchemaError) as exc:
+        errors.append(f"Unable to load configuration schema: {exc}")
     version = data.get("config_version", 1)
     if not isinstance(version, int) or version != 1:
         errors.append("config_version must be 1")
@@ -303,6 +316,12 @@ def validate_config_file(path: str) -> list[str]:
             "interval": 30,
             "history_limit": 100,
             "log_level": "INFO",
+            "stale_after_seconds": 60,
+            "state_file": "",
+            "auth_token_file": "",
+            "health_requires_auth": False,
+            "tls_cert_file": "",
+            "tls_key_file": "",
         }
         monitor_defaults.update(get_config_section(data, "monitor"))
         validate_monitor_config(
@@ -320,7 +339,7 @@ def validate_config_file(path: str) -> list[str]:
                 tls_key_file=str(monitor_defaults.get("tls_key_file", "")),
             )
         )
-    except (ConfigError, TypeError, KeyError) as exc:
+    except (ConfigError, TypeError, ValueError, KeyError) as exc:
         errors.append(f"monitor config: {exc}")
     return errors
 

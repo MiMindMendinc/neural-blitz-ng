@@ -51,6 +51,9 @@ class ServerConfig:
     log_level: str = "INFO"
     max_packet_size: int = 65_507
     rate_limit: float = 0.0
+    max_tracked_clients: int = 10_000
+    client_state_ttl: float = 300.0
+    cleanup_interval: float = 60.0
 
 
 @dataclass(frozen=True)
@@ -214,6 +217,12 @@ def validate_server_config(config: ServerConfig) -> None:
         raise ConfigError(f"Server max_packet_size must be between {HEADER_SIZE} and 65507")
     if config.rate_limit < 0:
         raise ConfigError("Server rate_limit cannot be negative")
+    if config.max_tracked_clients <= 0:
+        raise ConfigError("Server max_tracked_clients must be greater than zero")
+    if config.client_state_ttl <= 0:
+        raise ConfigError("Server client_state_ttl must be greater than zero")
+    if config.cleanup_interval <= 0:
+        raise ConfigError("Server cleanup_interval must be greater than zero")
 
 
 def validate_monitor_config(config: MonitorConfig) -> None:
@@ -261,6 +270,32 @@ def validate_config_file(path: str) -> list[str]:
         validate_test_config(test_cfg)
     except ConfigError as exc:
         errors.append(f"test config: {exc}")
+    try:
+        server_defaults: dict[str, Any] = {
+            "bind": "127.0.0.1",
+            "port": 9999,
+            "log_level": "INFO",
+            "max_packet_size": 65_507,
+            "rate_limit": 0.0,
+            "max_tracked_clients": 10_000,
+            "client_state_ttl": 300.0,
+            "cleanup_interval": 60.0,
+        }
+        server_defaults.update(get_config_section(data, "server"))
+        validate_server_config(
+            ServerConfig(
+                bind=str(server_defaults["bind"]),
+                port=int(server_defaults["port"]),
+                log_level=str(server_defaults["log_level"]),
+                max_packet_size=int(server_defaults["max_packet_size"]),
+                rate_limit=float(server_defaults["rate_limit"]),
+                max_tracked_clients=int(server_defaults["max_tracked_clients"]),
+                client_state_ttl=float(server_defaults["client_state_ttl"]),
+                cleanup_interval=float(server_defaults["cleanup_interval"]),
+            )
+        )
+    except (ConfigError, TypeError, ValueError, KeyError) as exc:
+        errors.append(f"server config: {exc}")
     try:
         monitor_defaults: dict[str, Any] = {
             "bind": "0.0.0.0",

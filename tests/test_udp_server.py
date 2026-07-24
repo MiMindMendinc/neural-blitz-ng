@@ -110,6 +110,45 @@ def test_echo_server_enforces_rate_limit_for_valid_packets():
 
 
 @pytest.mark.unit
+def test_echo_server_rate_limit_allows_fractional_rates_and_expires_idle_state():
+    now = [0.0]
+    protocol = EchoServerProtocol(
+        rate_limit=0.5,
+        client_state_ttl=10.0,
+        cleanup_interval=1.0,
+        clock=lambda: now[0],
+    )
+
+    assert protocol._allow("first")
+    assert not protocol._allow("first")
+    now[0] = 2.0
+    assert protocol._allow("first")
+    now[0] = 13.0
+    assert protocol._allow("second")
+
+    assert "first" not in protocol._clients
+    assert set(protocol._clients) == {"second"}
+
+
+@pytest.mark.unit
+def test_echo_server_evicts_oldest_client_deterministically_at_capacity():
+    now = [0.0]
+    protocol = EchoServerProtocol(
+        rate_limit=1.0,
+        max_tracked_clients=2,
+        client_state_ttl=100.0,
+        cleanup_interval=100.0,
+        clock=lambda: now[0],
+    )
+
+    assert protocol._allow("bravo")
+    assert protocol._allow("alpha")
+    assert protocol._allow("charlie")
+
+    assert set(protocol._clients) == {"bravo", "charlie"}
+
+
+@pytest.mark.unit
 def test_echo_server_logs_socket_and_connection_errors(caplog):
     protocol = EchoServerProtocol()
 

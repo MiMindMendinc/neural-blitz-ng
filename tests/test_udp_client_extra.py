@@ -13,7 +13,14 @@ from neural_blitz import udp_client
 from neural_blitz.config import TestConfig
 from neural_blitz.errors import NeuralBlitzError
 from neural_blitz.latency import build_packet
-from neural_blitz.udp_client import BlitzClientProtocol, TokenBucketLimiter, resolve_host, run_test, send_one
+from neural_blitz.udp_client import (
+    BlitzClientProtocol,
+    TokenBucketLimiter,
+    resolve_host,
+    resolve_hosts,
+    run_test,
+    send_one,
+)
 from neural_blitz.udp_server import EchoServerProtocol
 
 
@@ -25,6 +32,21 @@ def test_resolve_host_uses_first_udp_address():
     ]
     with mock.patch("neural_blitz.udp_client.socket.getaddrinfo", return_value=addresses):
         assert resolve_host("example.test", 9000) == ("::1", 9000)
+
+
+@pytest.mark.unit
+def test_resolve_hosts_keeps_ip_families_and_deduplicates_results():
+    addresses = [
+        (socket.AF_INET6, socket.SOCK_DGRAM, 17, "", ("::1", 9000, 0, 0)),
+        (socket.AF_INET6, socket.SOCK_DGRAM, 17, "", ("::1", 9000, 0, 0)),
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("127.0.0.1", 9000)),
+    ]
+
+    with mock.patch("neural_blitz.udp_client.socket.getaddrinfo", return_value=addresses):
+        assert resolve_hosts("example.test", 9000) == [
+            (socket.AF_INET6, ("::1", 9000, 0, 0)),
+            (socket.AF_INET, ("127.0.0.1", 9000)),
+        ]
 
 
 @pytest.mark.unit
@@ -253,6 +275,35 @@ async def test_run_test_records_timeout_as_unreceived_packet():
     assert stats.count_sent == 1
     assert stats.count_received == 0
     transport.close.assert_called_once_with()
+
+
+@pytest.mark.integration
+async def test_run_test_falls_back_from_ipv6_to_ipv4_server(caplog):
+    loop = asyncio.get_running_loop()
+    server_transport, _ = await loop.create_datagram_endpoint(EchoServerProtocol, local_addr=("127.0.0.1", 0))
+    port = server_transport.get_extra_info("sockname")[1]
+    config = TestConfig(
+        host="localhost", port=port, count=1, concurrency=1, timeout=0.05, warmup=0, progress_enabled=False
+    )
+
+    try:
+        with (
+            mock.patch(
+                "neural_blitz.udp_client.resolve_hosts",
+                return_value=[
+                    (socket.AF_INET6, ("::1", port, 0, 0)),
+                    (socket.AF_INET, ("127.0.0.1", port)),
+                ],
+            ),
+            caplog.at_level("WARNING", logger="neural_blitz"),
+        ):
+            stats = await run_test(config, use_rich=False)
+    finally:
+        server_transport.close()
+
+    assert stats.count_received == 1
+    assert "UDP address attempt ::1:" in caplog.text
+    assert "no response" in caplog.text
 
 
 @pytest.mark.integration

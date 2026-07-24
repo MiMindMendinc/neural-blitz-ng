@@ -99,6 +99,13 @@ def build_parser() -> argparse.ArgumentParser:
     server.add_argument("--port", "-p", type=int, default=None)
     server.add_argument("--max-packet-size", type=int, default=None)
     server.add_argument("--rate-limit", type=float, default=None, help="Maximum packets/sec per source; 0=unlimited")
+    server.add_argument(
+        "--max-tracked-clients", type=int, default=None, help="Maximum retained rate-limit clients"
+    )
+    server.add_argument("--client-state-ttl", type=float, default=None, help="Idle token-state expiry in seconds")
+    server.add_argument(
+        "--cleanup-interval", type=float, default=None, help="Expired-state cleanup interval in seconds"
+    )
     server.add_argument("--log-level", default=None, choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     batch = subparsers.add_parser("batch", help="Run tests for all targets in a YAML file")
@@ -190,6 +197,9 @@ def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -
     defaults.update(get_config_section(config_data, "server"))
     max_packet_size = getattr(args, "max_packet_size", None)
     rate_limit = getattr(args, "rate_limit", None)
+    max_tracked_clients = getattr(args, "max_tracked_clients", None)
+    client_state_ttl = getattr(args, "client_state_ttl", None)
+    cleanup_interval = getattr(args, "cleanup_interval", None)
     return ServerConfig(
         bind=str(args.bind if args.bind is not None else defaults["bind"]),
         port=int(args.port if args.port is not None else defaults["port"]),
@@ -198,6 +208,18 @@ def build_server_config(args: argparse.Namespace, config_data: dict[str, Any]) -
             cast(int, max_packet_size if max_packet_size is not None else defaults.get("max_packet_size", 65_507))
         ),
         rate_limit=float(cast(float, rate_limit if rate_limit is not None else defaults.get("rate_limit", 0.0))),
+        max_tracked_clients=int(
+            cast(
+                int,
+                max_tracked_clients if max_tracked_clients is not None else defaults.get("max_tracked_clients", 10_000),
+            )
+        ),
+        client_state_ttl=float(
+            cast(float, client_state_ttl if client_state_ttl is not None else defaults.get("client_state_ttl", 300.0))
+        ),
+        cleanup_interval=float(
+            cast(float, cleanup_interval if cleanup_interval is not None else defaults.get("cleanup_interval", 60.0))
+        ),
     )
 
 
@@ -380,6 +402,9 @@ def execute_server(args: argparse.Namespace, config_data: dict[str, Any], use_ri
                 config.port,
                 max_packet_size=config.max_packet_size,
                 rate_limit=config.rate_limit,
+                max_tracked_clients=config.max_tracked_clients,
+                client_state_ttl=config.client_state_ttl,
+                cleanup_interval=config.cleanup_interval,
             )
         )
     except KeyboardInterrupt:

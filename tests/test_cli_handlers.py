@@ -51,8 +51,12 @@ def test_build_test_config_from_args():
 @pytest.mark.unit
 def test_build_server_and_monitor_config():
     args = Namespace(bind=None, port=None, log_level=None, http_port=None, interval=None)
-    server = build_server_config(args, {"server": {"port": 9998}})
+    server = build_server_config(
+        args,
+        {"server": {"port": 9998, "max_tracked_clients": 7, "client_state_ttl": 12, "cleanup_interval": 3}},
+    )
     assert server.port == 9998
+    assert (server.max_tracked_clients, server.client_state_ttl, server.cleanup_interval) == (7, 12.0, 3.0)
     monitor = build_monitor_config(args, {"monitor": {"http_port": 7777}})
     assert monitor.http_port == 7777
 

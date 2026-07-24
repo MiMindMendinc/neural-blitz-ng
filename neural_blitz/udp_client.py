@@ -17,6 +17,7 @@ from neural_blitz.metrics import LatencyStats, compute_stats
 from neural_blitz.safety import log_responsible_use_notice, validate_test_safety
 
 logger = logging.getLogger("neural_blitz")
+ResolvedAddress = tuple[int, tuple[Any, ...]]
 
 _UVLOOP_AVAILABLE = False
 try:
@@ -35,14 +36,32 @@ def install_event_loop_policy() -> str:
 
 
 def resolve_host(host: str, port: int) -> tuple[str, int]:
+    """Return the first UDP address for compatibility with existing callers."""
+    family, sockaddr = resolve_hosts(host, port)[0]
+    del family
+    return str(sockaddr[0]), int(sockaddr[1])
+
+
+def resolve_hosts(host: str, port: int) -> list[ResolvedAddress]:
+    """Resolve every unique UDP destination, preserving IPv4 and IPv6 results."""
     try:
         addresses = socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)
     except socket.gaierror as exc:
         raise NeuralBlitzError(f"Unable to resolve host '{host}': {exc}") from exc
     if not addresses:
         raise NeuralBlitzError(f"Unable to resolve host '{host}'")
-    sockaddr = addresses[0][4]
-    return str(sockaddr[0]), int(sockaddr[1])
+    resolved: list[ResolvedAddress] = []
+    seen: set[tuple[int, tuple[Any, ...]]] = set()
+    for family, _socktype, _protocol, _canonname, sockaddr in addresses:
+        if family not in (socket.AF_INET, socket.AF_INET6):
+            continue
+        candidate = (family, tuple(sockaddr))
+        if candidate not in seen:
+            seen.add(candidate)
+            resolved.append(candidate)
+    if not resolved:
+        raise NeuralBlitzError(f"Unable to resolve host '{host}' to an IPv4 or IPv6 UDP address")
+    return resolved
 
 
 class BlitzClientProtocol(asyncio.DatagramProtocol):
@@ -199,7 +218,7 @@ class ProgressReporter:
 
 async def send_one(
     protocol: BlitzClientProtocol,
-    addr: tuple[str, int],
+    addr: tuple[Any, ...],
     seq_id: int,
     size: int,
     timeout: float,
@@ -250,16 +269,50 @@ async def run_test(config: TestConfig, *, use_rich: bool = True) -> LatencyStats
 
     loop = asyncio.get_running_loop()
     loop_engine = "uvloop" if _UVLOOP_AVAILABLE and type(loop).__module__.startswith("uvloop") else "asyncio"
-    addr = resolve_host(config.host, config.port)
-
-    try:
-        local_addr = ("::", 0) if ":" in addr[0] else ("0.0.0.0", 0)
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: BlitzClientProtocol(config.socket_rcvbuf, config.socket_sndbuf),
-            local_addr=local_addr,
-        )
-    except OSError as exc:
-        raise NeuralBlitzError(f"Unable to create UDP client endpoint: {exc}") from exc
+    addresses = resolve_hosts(config.host, config.port)
+    transport: asyncio.DatagramTransport | None = None
+    protocol: BlitzClientProtocol | None = None
+    attempts: list[str] = []
+    endpoint_errors: list[OSError] = []
+    for index, (family, addr) in enumerate(addresses, start=1):
+        address_label = f"{addr[0]}:{addr[1]}"
+        family_label = "IPv6" if family == socket.AF_INET6 else "IPv4"
+        logger.info("UDP address attempt %d/%d: %s (%s)", index, len(addresses), address_label, family_label)
+        try:
+            candidate_transport, candidate_protocol = await loop.create_datagram_endpoint(
+                lambda: BlitzClientProtocol(config.socket_rcvbuf, config.socket_sndbuf),
+                local_addr=("::", 0) if family == socket.AF_INET6 else ("0.0.0.0", 0),
+                family=family,
+            )
+        except OSError as exc:
+            endpoint_errors.append(exc)
+            attempts.append(f"{address_label} ({family_label} endpoint error: {exc})")
+            logger.warning("UDP address attempt %s failed: endpoint error: %s", address_label, exc)
+            continue
+        if len(addresses) > 1:
+            _probe_seq, probe_rtt, _probe_retries, _probe_scheduled = await send_one(
+                candidate_protocol,
+                addr,
+                (1 << 64) - 1,
+                config.size,
+                config.timeout,
+                0,
+                TokenBucketLimiter(0),
+            )
+            if probe_rtt is None:
+                attempts.append(f"{address_label} ({family_label} no response)")
+                logger.warning("UDP address attempt %s failed: no response", address_label)
+                candidate_transport.close()
+                continue
+        transport, protocol = candidate_transport, candidate_protocol
+        break
+    if transport is None or protocol is None:
+        if len(addresses) == 1 and endpoint_errors:
+            raise NeuralBlitzError(
+                f"Unable to create UDP client endpoint: {endpoint_errors[0]}"
+            ) from endpoint_errors[0]
+        detail = "; ".join(attempts) or "no usable UDP addresses"
+        raise NeuralBlitzError(f"Unable to reach UDP host '{config.host}:{config.port}': {detail}")
 
     limiter = TokenBucketLimiter(config.rate)
     logger.info(

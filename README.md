@@ -133,6 +133,18 @@ curl http://127.0.0.1:8888/health
 curl http://127.0.0.1:8888/metrics/prometheus
 ```
 
+Monitor probes have distinct meanings:
+
+- `/live` returns `200` whenever the monitor HTTP process is accepting requests.
+- `/ready` returns `200` once the targets file has been validated and a `never_run`
+  state has been created for every configured target.
+- `/health` reports downstream target health. It returns `200` only when every
+  target has a recent successful result, otherwise `503`.
+
+`/live`, `/ready`, and `/health` are available without a bearer token unless
+`health_requires_auth` is enabled. Use `/live` or `/ready` for container
+orchestrator probes; do not use downstream `/health` for process liveness.
+
 ## Docker
 
 ```bash

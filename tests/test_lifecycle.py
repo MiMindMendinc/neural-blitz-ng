@@ -4,6 +4,7 @@ import asyncio
 import builtins
 import json
 import signal
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -13,7 +14,7 @@ import neural_blitz.monitor as monitor
 from neural_blitz.config import MonitorConfig
 from neural_blitz.errors import DependencyMissing
 from neural_blitz.metrics import LatencyStats
-from neural_blitz.monitor import run_monitor_loop
+from neural_blitz.monitor import _atomic_json_write, run_monitor_loop
 from neural_blitz.udp_server import run_server
 
 
@@ -38,6 +39,69 @@ async def test_run_monitor_loop_one_cycle(mock_load, mock_batch):
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+@pytest.mark.integration
+@mock.patch("neural_blitz.monitor.run_batch_tests")
+@mock.patch("neural_blitz.monitor.load_targets_file")
+async def test_monitor_initializes_target_states_before_creating_http_app(mock_load, mock_batch):
+    mock_load.return_value = {
+        "targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}],
+        "__base_dir": ".",
+    }
+    mock_batch.return_value = []
+    original_build_app = monitor.build_monitor_app
+    observed = False
+
+    def verify_initial_state(*args: object, **kwargs: object):
+        nonlocal observed
+        states = kwargs["states"]
+        assert isinstance(states, dict)
+        assert states["local"].status(60) == "never_run"
+        observed = True
+        return original_build_app(*args, **kwargs)
+
+    with mock.patch("neural_blitz.monitor.build_monitor_app", side_effect=verify_initial_state):
+        task = asyncio.create_task(run_monitor_loop({}, "targets.yaml", MonitorConfig(bind="127.0.0.1", http_port=0)))
+        await asyncio.sleep(0.1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert observed
+
+
+@pytest.mark.unit
+def test_atomic_json_write_removes_temporary_file_after_write_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    destination = tmp_path / "monitor.json"
+    destination.write_text('{"previous": true}\n', encoding="utf-8")
+
+    def fail_write(*_args: object, **_kwargs: object) -> None:
+        raise OSError("disk failure")
+
+    monkeypatch.setattr(monitor.json, "dump", fail_write)
+    with pytest.raises(OSError, match="disk failure"):
+        _atomic_json_write(str(destination), {"next": True})
+
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"previous": True}
+    assert list(tmp_path.glob(".monitor.json.*.tmp")) == []
+
+
+@pytest.mark.unit
+def test_atomic_json_write_allows_concurrent_writers_without_temp_collisions(tmp_path: Path):
+    destination = tmp_path / "monitor.json"
+
+    def write(writer: int) -> None:
+        for sequence in range(10):
+            _atomic_json_write(str(destination), {"writer": writer, "sequence": sequence})
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(write, range(8)))
+
+    result = json.loads(destination.read_text(encoding="utf-8"))
+    assert result["writer"] in range(8)
+    assert result["sequence"] in range(10)
+    assert list(tmp_path.glob(".monitor.json.*.tmp")) == []
 
 
 @pytest.mark.integration

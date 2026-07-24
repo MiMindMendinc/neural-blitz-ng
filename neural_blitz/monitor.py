@@ -7,17 +7,24 @@ import contextlib
 import hmac
 import json
 import logging
+import os
 import signal
 import ssl
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from neural_blitz.config import MonitorConfig, build_test_config_from_overrides, load_targets_file
+from neural_blitz.config import (
+    MonitorConfig,
+    build_test_config_from_overrides,
+    load_targets_file,
+    validate_test_config,
+)
 from neural_blitz.constants import __version__
-from neural_blitz.errors import DependencyMissing
+from neural_blitz.errors import ConfigError, DependencyMissing
 from neural_blitz.metrics import LatencyStats, write_metrics
 from neural_blitz.prometheus import format_prometheus_metrics
 from neural_blitz.report_pdf import write_pdf_report
@@ -49,11 +56,60 @@ class TargetState:
 
 
 def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
+    """Durably replace *path* without exposing a partial JSON document."""
     destination = Path(path).expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    temporary.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(destination)
+    temporary_name: str | None = None
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            dir=destination.parent,
+            text=True,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, destination)
+        temporary_name = None
+        directory_fd = os.open(destination.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if temporary_name is not None:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary_name)
+
+
+def _initialize_target_states(
+    config_data: dict[str, Any],
+    targets_data: dict[str, Any],
+    states: dict[str, TargetState],
+) -> None:
+    """Validate configured targets and create their visible initial states."""
+    shared_overrides = targets_data.get("test", {})
+    if shared_overrides and not isinstance(shared_overrides, dict):
+        raise ConfigError("Targets file key 'test' must be a mapping")
+
+    labels: set[str] = set()
+    targets = targets_data["targets"]
+    for index, target in enumerate(targets):
+        if not isinstance(target, dict):
+            raise ConfigError("Each target entry must be a mapping")
+        label = str(target.get("label") or target.get("name") or f"target-{index + 1}")
+        if label in labels:
+            raise ConfigError(f"Target labels must be unique: {label!r}")
+        labels.add(label)
+        overrides = dict(shared_overrides or {})
+        overrides.update(target)
+        overrides["label"] = label
+        overrides["progress_enabled"] = False
+        validate_test_config(build_test_config_from_overrides(config_data, overrides))
+        states.setdefault(label, TargetState())
 
 
 async def run_batch_tests(
@@ -94,8 +150,6 @@ async def run_batch_tests(
         if pdf_dir:
             overrides["pdf_report"] = str(Path(pdf_dir).expanduser() / f"{label}.pdf")
         batch_config = build_test_config_from_overrides(config_data, overrides)
-        from neural_blitz.config import validate_test_config
-
         validate_test_config(batch_config)
         logger.info("Batch target %s -> %s:%d", batch_config.label, batch_config.host, batch_config.port)
         try:
@@ -146,7 +200,7 @@ def build_monitor_app(
 
     @web.middleware
     async def authentication(request: web.Request, handler: Any) -> web.StreamResponse:
-        if not auth_token or (request.path == "/health" and not health_requires_auth):
+        if not auth_token or (request.path in {"/health", "/live", "/ready"} and not health_requires_auth):
             return cast(web.StreamResponse, await handler(request))
         provided = request.headers.get("Authorization", "")
         expected = f"Bearer {auth_token}"
@@ -179,6 +233,14 @@ def build_monitor_app(
             status=200 if status == "ok" else 503,
         )
 
+    async def live(_: web.Request) -> web.Response:
+        """Report whether this HTTP process can answer requests."""
+        return web.json_response({"status": "live", "version": __version__})
+
+    async def ready(_: web.Request) -> web.Response:
+        """Report whether configured target state has been initialized."""
+        return web.json_response({"status": "ready", "targets": len(states)})
+
     async def api_targets(_: web.Request) -> web.Response:
         return web.json_response(sorted(states.keys()))
 
@@ -206,6 +268,8 @@ def build_monitor_app(
     app.router.add_get("/metrics", metrics_json)
     app.router.add_get("/metrics/prometheus", metrics_prometheus)
     app.router.add_get("/health", health)
+    app.router.add_get("/live", live)
+    app.router.add_get("/ready", ready)
     app.router.add_get("/api/targets", api_targets)
     app.router.add_get("/api/target/{label}", api_target)
     app.router.add_get("/api/target/{label}/status", api_target_status)
@@ -237,18 +301,16 @@ async def run_monitor_loop(
         if not auth_token:
             raise DependencyMissing("Monitor auth token file is empty")
 
+    initial_targets_data = load_targets_file(targets_file)
+    initial_targets_data.setdefault("test", {})
+    _initialize_target_states(config_data, initial_targets_data, states)
+
     async def run_cycle() -> None:
         targets_data = load_targets_file(targets_file)
         targets_data.setdefault("test", {})
+        _initialize_target_states(config_data, targets_data, states)
         cycle_failures: dict[str, str] = {}
         results = await run_batch_tests(config_data, targets_data, use_rich=use_rich, failures=cycle_failures)
-        configured_labels = {
-            str(target.get("label") or target.get("name") or f"target-{index + 1}")
-            for index, target in enumerate(targets_data["targets"])
-            if isinstance(target, dict)
-        }
-        for label in configured_labels:
-            states.setdefault(label, TargetState())
         for label, error in cycle_failures.items():
             state = states.setdefault(label, TargetState())
             state.last_error = error

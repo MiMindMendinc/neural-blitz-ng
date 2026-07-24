@@ -1,5 +1,7 @@
 """Monitor HTTP endpoint tests."""
 
+import time
+
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -55,6 +57,45 @@ async def test_monitor_bearer_auth_and_degraded_health():
         assert authorized.status == 200
         status = await client.get("/api/target/local/status", headers={"Authorization": "Bearer secret"})
         assert (await status.json())["status"] in {"degraded", "ok"}
+
+
+@pytest.mark.integration
+async def test_monitor_startup_probes_are_available_before_targets_run():
+    states = {"local": TargetState()}
+    app = build_monitor_app({}, {}, states=states, auth_token="secret")
+    async with TestClient(TestServer(app)) as client:
+        live = await client.get("/live")
+        ready = await client.get("/ready")
+        health = await client.get("/health")
+        target = await client.get("/api/target/local/status", headers={"Authorization": "Bearer secret"})
+
+        assert live.status == 200
+        assert (await live.json())["status"] == "live"
+        assert ready.status == 200
+        assert await ready.json() == {"status": "ready", "targets": 1}
+        assert health.status == 503
+        assert (await health.json())["target_status"] == {"local": "never_run"}
+        assert await target.json() == {
+            "status": "never_run",
+            "last_error": None,
+            "consecutive_failures": 0,
+        }
+
+
+@pytest.mark.integration
+async def test_monitor_health_tracks_success_and_failure_not_process_probes():
+    states = {"local": TargetState()}
+    app = build_monitor_app({}, {}, states=states)
+    async with TestClient(TestServer(app)) as client:
+        assert (await client.get("/health")).status == 503
+        states["local"].latest = LatencyStats(success_rate=100.0)
+        states["local"].last_success_at = time.time()
+        states["local"].last_error = None
+        assert (await client.get("/health")).status == 200
+        states["local"].last_error = "timeout"
+        assert (await client.get("/health")).status == 503
+        assert (await client.get("/live")).status == 200
+        assert (await client.get("/ready")).status == 200
 
 
 @pytest.mark.integration

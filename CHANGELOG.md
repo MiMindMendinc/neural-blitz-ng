@@ -17,6 +17,11 @@ All notable changes to Neural Blitz NG are documented here.
 - README positioning for Starlink / mesh / rural operators, including a ping / iperf / SmokePing comparison
 - `init-config` writes a sibling SLA file and prints next-step commands
 
+### Fixed
+- Ship JSON Schema inside the wheel (`neural_blitz/schemas/`) so `validate-config` works after `pip install`
+- Honor targets-file `defaults:` in batch and monitor (Starlink/mesh/nonprofit probe rates now apply)
+- Tolerate Windows directory `fsync` failures when persisting monitor state
+
 ### Dependencies
 - No new runtime dependencies.
 

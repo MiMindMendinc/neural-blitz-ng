@@ -20,6 +20,7 @@ from typing import Any, cast
 from neural_blitz.config import (
     MonitorConfig,
     build_test_config_from_overrides,
+    get_config_section,
     load_targets_file,
     validate_test_config,
 )
@@ -199,11 +200,15 @@ def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary_name, destination)
         temporary_name = None
-        directory_fd = os.open(destination.parent, os.O_RDONLY)
         try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+            directory_fd = os.open(destination.parent, os.O_RDONLY)
+        except OSError:
+            directory_fd = None
+        if directory_fd is not None:
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
     finally:
         if temporary_name is not None:
             with contextlib.suppress(FileNotFoundError):
@@ -216,9 +221,7 @@ def _initialize_target_states(
     states: dict[str, TargetState],
 ) -> None:
     """Validate configured targets and create their visible initial states."""
-    shared_overrides = targets_data.get("test", {})
-    if shared_overrides and not isinstance(shared_overrides, dict):
-        raise ConfigError("Targets file key 'test' must be a mapping")
+    shared_overrides = get_config_section(targets_data, "test")
 
     labels: set[str] = set()
     targets = targets_data["targets"]
@@ -248,12 +251,8 @@ async def run_batch_tests(
 ) -> list[LatencyStats]:
     from pathlib import Path
 
-    shared_overrides = targets_data.get("test", {})
+    shared_overrides = get_config_section(targets_data, "test")
     base_dir = Path(str(targets_data.get("__base_dir", Path.cwd())))
-    if shared_overrides and not isinstance(shared_overrides, dict):
-        from neural_blitz.errors import ConfigError
-
-        raise ConfigError("Targets file key 'test' must be a mapping")
     results: list[LatencyStats] = []
     for index, target in enumerate(targets_data["targets"]):
         if not isinstance(target, dict):

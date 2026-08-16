@@ -71,6 +71,8 @@ authentication, TLS, staleness, and persistence fields.
 
 Any test flag overrides YAML values. Use `--config` to load a base file.
 
+Batch and monitor merge each targets file's `defaults` with its `test` section, then apply per-target keys. Profile `defaults:` (count, rate, concurrency, timeout) are honored.
+
 ## Safety
 
 Public targets require `--i-understand-authorized-target` on the CLI or `authorized_target: true` in config (use only with permission). `--i-understand-authorized-target` on `monitor` and `batch` is applied to the in-memory config so reloads keep the authorization for that process.

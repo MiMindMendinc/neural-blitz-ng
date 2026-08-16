@@ -3,6 +3,7 @@
 import asyncio
 import builtins
 import json
+import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -102,6 +103,56 @@ def test_atomic_json_write_allows_concurrent_writers_without_temp_collisions(tmp
     assert result["writer"] in range(8)
     assert result["sequence"] in range(10)
     assert list(tmp_path.glob(".monitor.json.*.tmp")) == []
+
+
+@pytest.mark.unit
+def test_atomic_json_write_tolerates_directory_sync_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    destination = tmp_path / "monitor.json"
+    original_open = os.open
+
+    def fail_directory_open(path: str | bytes | os.PathLike[str], flags: int, *args: object, **kwargs: object) -> int:
+        if flags == os.O_RDONLY:
+            raise OSError("directory open unsupported")
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(monitor.os, "open", fail_directory_open)
+    _atomic_json_write(str(destination), {"ok": True})
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"ok": True}
+
+
+@pytest.mark.unit
+def test_atomic_json_write_directory_fsync_success_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    destination = tmp_path / "monitor.json"
+    original_open = os.open
+    original_fsync = os.fsync
+    original_close = os.close
+    fake_fd = 4242
+    calls: list[str] = []
+
+    def fake_open(path: str | bytes | os.PathLike[str], flags: int, *args: object, **kwargs: object) -> int:
+        if flags == os.O_RDONLY:
+            calls.append("open")
+            return fake_fd
+        return original_open(path, flags, *args, **kwargs)
+
+    def fake_fsync(fd: int) -> None:
+        if fd == fake_fd:
+            calls.append("fsync")
+            return None
+        original_fsync(fd)
+
+    def fake_close(fd: int) -> None:
+        if fd == fake_fd:
+            calls.append("close")
+            return None
+        original_close(fd)
+
+    monkeypatch.setattr(monitor.os, "open", fake_open)
+    monkeypatch.setattr(monitor.os, "fsync", fake_fsync)
+    monkeypatch.setattr(monitor.os, "close", fake_close)
+    _atomic_json_write(str(destination), {"ok": True})
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"ok": True}
+    assert calls == ["open", "fsync", "close"]
 
 
 @pytest.mark.integration

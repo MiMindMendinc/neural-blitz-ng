@@ -70,7 +70,7 @@ where = ["."]
 include = ["neural_blitz*"]
 
 [tool.setuptools.package-data]
-neural_blitz = ["profiles/*.yaml"]
+neural_blitz = ["profiles/*.yaml", "schemas/*.json"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

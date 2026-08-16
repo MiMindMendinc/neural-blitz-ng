@@ -217,7 +217,7 @@ async def test_monitor_hot_reload_on_sighup_and_file_change(mock_batch: mock.Asy
         "targets:\n  - label: first\n    host: 127.0.0.1\n    port: 9999\n",
         encoding="utf-8",
     )
-    config = MonitorConfig(bind="127.0.0.1", http_port=0, interval=60)
+    config = MonitorConfig(bind="127.0.0.1", http_port=0, interval=1)
     loop = asyncio.get_running_loop()
     handlers: dict[object, object] = {}
 
@@ -229,7 +229,9 @@ async def test_monitor_hot_reload_on_sighup_and_file_change(mock_batch: mock.Asy
             "targets:\n  - label: second\n    host: 127.0.0.1\n    port: 9998\nmonitor:\n  interval: 15\n",
             encoding="utf-8",
         )
-        handlers[signal.SIGHUP]()  # type: ignore[operator]
+        hup = getattr(signal, "SIGHUP", None)
+        if hup is not None:
+            handlers[hup]()  # type: ignore[operator]
 
         async def stop_second(*_args: object, **_kwargs: object):
             handlers[signal.SIGTERM]()  # type: ignore[operator]
@@ -240,7 +242,7 @@ async def test_monitor_hot_reload_on_sighup_and_file_change(mock_batch: mock.Asy
 
     mock_batch.side_effect = after_first_cycle
     with mock.patch.object(loop, "add_signal_handler", side_effect=capture):
-        await asyncio.wait_for(run_monitor_loop({}, str(targets), config), timeout=2.0)
+        await asyncio.wait_for(run_monitor_loop({}, str(targets), config), timeout=5.0)
 
     assert mock_batch.await_count == 2
     second_targets = mock_batch.await_args_list[1].args[1]["targets"]

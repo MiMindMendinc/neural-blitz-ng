@@ -9,14 +9,20 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from neural_blitz.config import MonitorConfig, ServerConfig, TestConfig, validate_config_file, write_sample_config
+from neural_blitz.config import (
+    PACKAGE_SCHEMA_PATH,
+    MonitorConfig,
+    ServerConfig,
+    TestConfig,
+    validate_config_file,
+    write_sample_config,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = ROOT / "schemas" / "neural_blitz.schema.json"
 
 
 def _schema() -> dict[str, object]:
-    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    return json.loads(PACKAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 @pytest.mark.unit
@@ -80,3 +86,16 @@ def test_strict_schema_rejects_unknown_keys(tmp_path: Path, content: str):
 @pytest.mark.unit
 def test_schema_itself_is_valid():
     Draft202012Validator.check_schema(_schema())
+
+
+@pytest.mark.unit
+def test_packaged_schema_is_inside_the_neural_blitz_package():
+    assert PACKAGE_SCHEMA_PATH.is_file()
+    assert PACKAGE_SCHEMA_PATH.parent.name == "schemas"
+    assert PACKAGE_SCHEMA_PATH.parent.parent.name == "neural_blitz"
+
+
+@pytest.mark.unit
+def test_root_schema_copy_matches_packaged_schema():
+    root_schema = ROOT / "schemas" / "neural_blitz.schema.json"
+    assert root_schema.read_bytes() == PACKAGE_SCHEMA_PATH.read_bytes()

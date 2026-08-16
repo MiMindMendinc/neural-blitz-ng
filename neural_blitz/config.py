@@ -14,7 +14,9 @@ from neural_blitz.constants import DEFAULT_CONFIG_BASENAME, HEADER_SIZE
 from neural_blitz.errors import ConfigError, DependencyMissing
 from neural_blitz.metrics import validate_metrics_output_path
 
-PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PROFILES_DIR = PACKAGE_ROOT / "profiles"
+PACKAGE_SCHEMA_PATH = PACKAGE_ROOT / "schemas" / "neural_blitz.schema.json"
 CONFIG_PROFILES: dict[str, str] = {
     "local": "Local loopback benchmark (default)",
     "starlink": "Starlink residential uplink",
@@ -263,8 +265,7 @@ def validate_config_file(path: str) -> list[str]:
     except ConfigError as exc:
         return [str(exc)]
     try:
-        schema_path = Path(__file__).resolve().parent.parent / "schemas" / "neural_blitz.schema.json"
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        schema = json.loads(PACKAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = Draft202012Validator(schema)
         for error in sorted(validator.iter_errors(data), key=lambda item: list(item.absolute_path)):
             location = ".".join(str(part) for part in error.absolute_path) or "config"

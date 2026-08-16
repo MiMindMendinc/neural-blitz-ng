@@ -220,18 +220,28 @@ async def test_monitor_hot_reload_on_sighup_and_file_change(mock_batch: mock.Asy
     config = MonitorConfig(bind="127.0.0.1", http_port=0, interval=1)
     loop = asyncio.get_running_loop()
     handlers: dict[object, object] = {}
+    captured: dict[str, object] = {}
+    original_register = register_monitor_signal_handlers
 
     def capture(sig: object, callback: object) -> None:
         handlers[sig] = callback
+
+    def capture_register(
+        event_loop: object,
+        on_signal: object,
+        on_reload: object,
+        *,
+        signals_module: object = signal,
+    ) -> None:
+        captured["reload"] = on_reload
+        original_register(event_loop, on_signal, on_reload, signals_module=signals_module)  # type: ignore[arg-type]
 
     async def after_first_cycle(*args: object, **kwargs: object):
         targets.write_text(
             "targets:\n  - label: second\n    host: 127.0.0.1\n    port: 9998\nmonitor:\n  interval: 15\n",
             encoding="utf-8",
         )
-        hup = getattr(signal, "SIGHUP", None)
-        if hup is not None:
-            handlers[hup]()  # type: ignore[operator]
+        captured["reload"]()  # type: ignore[operator]
 
         async def stop_second(*_args: object, **_kwargs: object):
             handlers[signal.SIGTERM]()  # type: ignore[operator]
@@ -241,7 +251,10 @@ async def test_monitor_hot_reload_on_sighup_and_file_change(mock_batch: mock.Asy
         return [LatencyStats(label="first", success_rate=100.0)]
 
     mock_batch.side_effect = after_first_cycle
-    with mock.patch.object(loop, "add_signal_handler", side_effect=capture):
+    with (
+        mock.patch.object(loop, "add_signal_handler", side_effect=capture),
+        mock.patch("neural_blitz.monitor.register_monitor_signal_handlers", side_effect=capture_register),
+    ):
         await asyncio.wait_for(run_monitor_loop({}, str(targets), config), timeout=5.0)
 
     assert mock_batch.await_count == 2

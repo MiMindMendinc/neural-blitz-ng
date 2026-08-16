@@ -17,6 +17,7 @@ from neural_blitz.metrics import LatencyStats
 from neural_blitz.monitor import (
     MonitorRuntime,
     TargetState,
+    _wake_monitor_loop,
     apply_reloadable_monitor_settings,
     build_monitor_app,
     configured_target_labels,
@@ -146,6 +147,15 @@ def test_reload_monitor_config_keeps_last_good_on_invalid_file(tmp_path: Path):
     assert "non-empty" in runtime.reload_error
     assert runtime.targets_data is original
     assert "kept" in states
+
+
+@pytest.mark.unit
+def test_wake_monitor_loop_sets_control_and_wakeup_events():
+    flag = asyncio.Event()
+    wakeup = asyncio.Event()
+    _wake_monitor_loop(flag, wakeup)
+    assert flag.is_set()
+    assert wakeup.is_set()
 
 
 @pytest.mark.unit

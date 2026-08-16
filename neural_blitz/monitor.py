@@ -14,6 +14,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, cast
 
@@ -68,6 +69,12 @@ class MonitorRuntime:
     reload_error: str | None = None
     last_reload_at: str | None = None
     reload_count: int = 0
+
+
+def _wake_monitor_loop(flag: asyncio.Event, wakeup: asyncio.Event) -> None:
+    """Set a control flag and interrupt the monitor interval wait."""
+    flag.set()
+    wakeup.set()
 
 
 def register_monitor_signal_handlers(
@@ -526,16 +533,11 @@ async def run_monitor_loop(
     logger.info("Monitor HTTP listening on %s:%d", monitor_config.bind, monitor_config.http_port)
 
     loop = asyncio.get_running_loop()
-
-    def on_signal() -> None:
-        shutdown.set()
-        wakeup.set()
-
-    def on_reload() -> None:
-        reload_now.set()
-        wakeup.set()
-
-    register_monitor_signal_handlers(loop, on_signal, on_reload)
+    register_monitor_signal_handlers(
+        loop,
+        partial(_wake_monitor_loop, shutdown, wakeup),
+        partial(_wake_monitor_loop, reload_now, wakeup),
+    )
 
     try:
         while not shutdown.is_set():

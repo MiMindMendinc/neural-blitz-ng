@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import struct
 
-__version__ = "9.0.0"
+__version__ = "9.1.0"
 APP_NAME = "neural-blitz"
 DEFAULT_CONFIG_BASENAME = "neural_blitz.yaml"
 SUPPORTED_METRICS_SUFFIXES = {".json", ".csv"}

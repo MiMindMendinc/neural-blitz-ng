@@ -5,9 +5,10 @@
 ## Fast path
 
 ```bash
-pip install -e ".[dev,pdf]"
-neural-blitz server --bind 127.0.0.1 --port 9999
-neural-blitz test --host 127.0.0.1 --port 9999 --count 1000
+    pip install -e ".[dev,pdf]"
+    neural-blitz init-config --profile local
+    neural-blitz server --bind 127.0.0.1 --port 9999
+    neural-blitz test --host 127.0.0.1 --port 9999 --count 1000
 ```
 
 Full README: [README.md](README.md)

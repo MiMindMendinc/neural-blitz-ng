@@ -1,0 +1,8 @@
+# Starlink residential SLA — handover-tolerant, not a datacenter SLO.
+# Typical LEO RTT to a well-placed VPS is 20–60ms; spikes to 100–250ms
+# during satellite handovers or obstruction. Tune after a week of data.
+min_success_rate: 95.0
+max_loss_rate: 5.0
+max_p95_us: 120000.0
+max_p99_us: 250000.0
+max_jitter_us: 50000.0

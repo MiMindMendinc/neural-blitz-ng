@@ -50,4 +50,10 @@ at `/api/target/{label}`.
 
 ## Grafana
 
-Import `examples/grafana-dashboard.json` as a starting dashboard.
+Import `examples/grafana-dashboard.json`:
+
+1. Grafana → Dashboards → Import → upload the JSON
+2. Select your Prometheus datasource when prompted (or use the dashboard `datasource` variable)
+3. Filter hops/dishes with the **Target** variable (`label`)
+
+Panels: target up, success, loss, p95, jitter, percentile overlay, latest-run packet snapshots, and seconds since last run. Stat-panel thresholds are Starlink/mesh starting points (p95 yellow at 50ms, red at 120ms) — tune to your SLA. The dashboard does not use `rate()` or `increase()` on the packet snapshot gauges.

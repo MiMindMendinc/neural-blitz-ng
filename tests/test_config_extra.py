@@ -33,3 +33,4 @@ def test_write_sample_config(tmp_path: Path):
     text = path.read_text(encoding="utf-8")
     assert "targets:" in text
     assert "monitor:" in text
+    assert (tmp_path / "sla-local.yaml").exists()

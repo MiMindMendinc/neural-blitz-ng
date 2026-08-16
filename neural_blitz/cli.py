@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import json
 import sys
-from pathlib import Path
 from typing import Any, cast
 
 from neural_blitz.compare import ComparisonThresholds, compare_stats, evaluate_comparison, write_comparison_output
@@ -17,6 +16,7 @@ from neural_blitz.config import (
     coerce_bool,
     default_test_values,
     get_config_section,
+    list_config_profiles,
     load_config,
     load_targets_file,
     normalize_test_values,
@@ -60,7 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=APP_NAME,
         description="Local-first UDP latency benchmarking and monitoring for authorized operators.",
-        epilog="Neural Blitz NG is for authorized monitoring only. Default targets are localhost.",
+        epilog=(
+            "Authorized monitoring only. Default targets are localhost.\n\n"
+            "First run:\n"
+            "  neural-blitz init-config --profile starlink\n"
+            "  neural-blitz server --bind 127.0.0.1 --port 9999\n"
+            "  neural-blitz monitor --targets-file neural_blitz.yaml"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--config", default=None, help="Path to YAML config file")
@@ -120,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
     monitor.add_argument("--http-port", type=int, default=None)
     monitor.add_argument("--interval", type=int, default=None)
     monitor.add_argument("--log-level", default=None, choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    monitor.add_argument(
+        "--no-reload",
+        action="store_true",
+        help="Do not hot-reload the targets file (mtime changes and SIGHUP are ignored)",
+    )
     monitor.add_argument("--i-understand-authorized-target", action="store_true")
 
     compare = subparsers.add_parser("compare", help="Compare baseline and candidate metrics")
@@ -145,10 +157,20 @@ def build_parser() -> argparse.ArgumentParser:
     version_cmd = subparsers.add_parser("version", help="Print version information")
     version_cmd.add_argument("--json", action="store_true")
 
-    init_config = subparsers.add_parser(
-        "init-config", help="Write a sample YAML config (alias: validate-config template)"
-    )
+    init_config = subparsers.add_parser("init-config", help="Write a sample YAML config and matching SLA file")
     init_config.add_argument("--output", default=DEFAULT_CONFIG_BASENAME)
+    init_config.add_argument(
+        "--profile",
+        default="local",
+        choices=sorted(list_config_profiles()),
+        help="Operator profile to write (default: local)",
+    )
+    init_config.add_argument(
+        "--list-profiles",
+        action="store_true",
+        help="List available profiles and exit without writing files",
+    )
+    init_config.add_argument("--json", action="store_true", help="Machine-readable output")
 
     return parser
 
@@ -363,9 +385,10 @@ def render_batch_results(results: list[LatencyStats], *, use_rich: bool, as_json
 def _apply_authorized_flag(config_data: dict[str, Any], targets_data: dict[str, Any], authorized: bool) -> None:
     if not authorized:
         return
-    test_section = targets_data.setdefault("test", {})
-    if isinstance(test_section, dict):
-        test_section["authorized_target"] = True
+    for data in (config_data, targets_data):
+        test_section = data.setdefault("test", {})
+        if isinstance(test_section, dict):
+            test_section["authorized_target"] = True
 
 
 def execute_test(args: argparse.Namespace, config_data: dict[str, Any], use_rich: bool) -> int:
@@ -467,7 +490,15 @@ def execute_monitor(args: argparse.Namespace, config_data: dict[str, Any], use_r
     targets_data = load_targets_file(args.targets_file)
     _apply_authorized_flag(config_data, targets_data, getattr(args, "i_understand_authorized_target", False))
     try:
-        asyncio.run(run_monitor_loop(config_data, args.targets_file, config, use_rich=False))
+        asyncio.run(
+            run_monitor_loop(
+                config_data,
+                args.targets_file,
+                config,
+                use_rich=False,
+                reload_config=not getattr(args, "no_reload", False),
+            )
+        )
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
     return EXIT_SUCCESS
@@ -511,14 +542,30 @@ def execute_version(args: argparse.Namespace) -> int:
 
 
 def execute_init_config(args: argparse.Namespace, use_rich: bool) -> int:
-    write_sample_config(args.output)
-    message = f"Sample config written to {Path(args.output).expanduser()}"
+    if getattr(args, "list_profiles", False):
+        profiles = list_config_profiles()
+        payload = [{"name": name, "description": description} for name, description in profiles.items()]
+        if getattr(args, "json", False):
+            print(json.dumps({"profiles": payload}, indent=2))
+        else:
+            width = max(len(name) for name in profiles)
+            for name, description in profiles.items():
+                print(f"{name:<{width}}  {description}")
+        return EXIT_SUCCESS
+    written = write_sample_config(args.output, profile=getattr(args, "profile", "local"))
+    message = "Wrote " + ", ".join(written)
+    next_steps = (
+        f"Next: neural-blitz validate-config {written[0]}\n"
+        f"      neural-blitz server --bind 127.0.0.1 --port 9999\n"
+        f"      neural-blitz monitor --targets-file {written[0]}"
+    )
     if use_rich and RICH_AVAILABLE and console is not None:
         from rich.panel import Panel
 
-        console.print(Panel.fit(message, style="green"))
+        console.print(Panel.fit(f"{message}\n{next_steps}", style="green"))
     else:
         print(message)
+        print(next_steps)
     return EXIT_SUCCESS
 
 

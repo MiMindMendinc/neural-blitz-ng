@@ -1,0 +1,45 @@
+# Neural Blitz NG — Starlink residential uplink
+#
+# What this measures: UDP RTT / loss / jitter from the dish LAN to YOUR
+# far-side echo server (a VPS or site you own). ICMP ping hides handover
+# spikes; UDP is what realtime traffic actually sees.
+#
+# Setup:
+#   1. Run `neural-blitz server` on a host you control (VPS, HQ, clinic).
+#   2. Replace host below with that echo server.
+#   3. Confirm authorization, then:
+#        neural-blitz monitor --targets-file neural_blitz.yaml \
+#          --i-understand-authorized-target
+#
+# Probe style is gentle on a contended rural/LEO link: 50 pps, 200 packets
+# per cycle, 60s interval. SLA allows handover loss and 100ms-class p95.
+#
+# Do not point this at third-party hosts. No scanning. Authorized use only.
+config_version: 1
+defaults:
+  count: 200
+  size: 64
+  concurrency: 8
+  timeout: 3.0
+  rate: 50
+  warmup: 10
+  max_retries: 0
+  co_correction: true
+
+monitor:
+  bind: "0.0.0.0"
+  http_port: 8888
+  interval: 60
+  history_limit: 180
+  stale_after_seconds: 180
+
+targets:
+  - label: starlink-uplink
+    # Replace with YOUR far-side UDP echo server after authorization.
+    host: 127.0.0.1
+    port: 9999
+    sla: sla-starlink.yaml
+
+server:
+  bind: 127.0.0.1
+  port: 9999

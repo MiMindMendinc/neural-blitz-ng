@@ -4,13 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neural-blitz-ng"
-version = "9.0.0"
+version = "9.1.0"
 description = "Local-first UDP latency benchmarking and monitoring with SLA checks, Prometheus metrics, and Docker deployment."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Michigan MindMend Inc." }]
-keywords = ["udp", "latency", "monitoring", "prometheus", "network", "benchmark"]
+keywords = [
+  "udp",
+  "latency",
+  "jitter",
+  "monitoring",
+  "prometheus",
+  "network",
+  "benchmark",
+  "starlink",
+  "mesh",
+  "rural",
+  "sla",
+]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -56,6 +68,9 @@ Issues = "https://github.com/MiMindMendinc/neural-blitz-ng/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["neural_blitz*"]
+
+[tool.setuptools.package-data]
+neural_blitz = ["profiles/*.yaml"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

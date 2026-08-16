@@ -31,3 +31,16 @@ neural-blitz validate-sla examples/sla.yaml
 ```
 
 Failures list actual vs threshold for each violated check.
+
+## Operator SLA starters
+
+Do not use the localhost SLA on a Starlink or mesh path. Packaged starters:
+
+| File | Intended path |
+| ---- | ------------- |
+| [examples/sla.yaml](../examples/sla.yaml) / `sla-local.yaml` | Loopback / CI |
+| [examples/sla-starlink.yaml](../examples/sla-starlink.yaml) | Residential LEO uplink |
+| [examples/sla-mesh.yaml](../examples/sla-mesh.yaml) | Per-hop mesh |
+| [examples/sla-nonprofit.yaml](../examples/sla-nonprofit.yaml) | Remote site / telehealth |
+
+`neural-blitz init-config --profile …` writes the matching SLA next to the config. Tune after a few days of real data.

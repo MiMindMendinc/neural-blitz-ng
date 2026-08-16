@@ -1,5 +1,7 @@
 # Neural Blitz NG example configuration
 # Copy to neural_blitz.yaml and adjust for your environment.
+# Other starters: starlink-residential.yaml, mesh-multihop.yaml, nonprofit-remote-site.yaml
+#   neural-blitz init-config --profile starlink
 
 defaults:
   count: 1000

@@ -155,6 +155,42 @@ def test_atomic_json_write_directory_fsync_success_path(tmp_path: Path, monkeypa
     assert calls == ["open", "fsync", "close"]
 
 
+@pytest.mark.unit
+def test_atomic_json_write_retries_permission_error_on_replace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    destination = tmp_path / "monitor.json"
+    original_replace = os.replace
+    attempts = {"count": 0}
+
+    def flaky_replace(src: str | bytes | os.PathLike[str], dst: str | bytes | os.PathLike[str]) -> None:
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise PermissionError("Access is denied")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(monitor.os, "replace", flaky_replace)
+    monkeypatch.setattr(monitor.time, "sleep", lambda *_args, **_kwargs: None)
+    _atomic_json_write(str(destination), {"ok": True})
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"ok": True}
+    assert attempts["count"] == 3
+    assert list(tmp_path.glob(".monitor.json.*.tmp")) == []
+
+
+@pytest.mark.unit
+def test_atomic_json_write_raises_after_replace_retries_exhausted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    destination = tmp_path / "monitor.json"
+    sleeps: list[float] = []
+
+    def always_denied(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError("Access is denied")
+
+    monkeypatch.setattr(monitor.os, "replace", always_denied)
+    monkeypatch.setattr(monitor.time, "sleep", lambda delay, **_kwargs: sleeps.append(delay))
+    with pytest.raises(PermissionError, match="Access is denied"):
+        _atomic_json_write(str(destination), {"ok": True})
+    assert sleeps == [0.01 * attempt for attempt in range(1, monitor._ATOMIC_REPLACE_ATTEMPTS + 1)]
+    assert list(tmp_path.glob(".monitor.json.*.tmp")) == []
+
+
 @pytest.mark.integration
 async def test_run_server_signal_shutdown():
     loop = asyncio.get_running_loop()

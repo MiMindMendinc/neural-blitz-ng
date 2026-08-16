@@ -181,6 +181,9 @@ def reload_monitor_config(
         return False
 
 
+_ATOMIC_REPLACE_ATTEMPTS = 5
+
+
 def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
     """Durably replace *path* without exposing a partial JSON document."""
     destination = Path(path).expanduser()
@@ -198,8 +201,20 @@ def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary_name, destination)
-        temporary_name = None
+        assert temporary_name is not None
+        source = temporary_name
+        replace_error: PermissionError | None = None
+        for attempt in range(_ATOMIC_REPLACE_ATTEMPTS):
+            try:
+                os.replace(source, destination)
+                replace_error = None
+                temporary_name = None
+                break
+            except PermissionError as exc:
+                replace_error = exc
+                time.sleep(0.01 * (attempt + 1))
+        if replace_error is not None:
+            raise replace_error
         try:
             directory_fd = os.open(destination.parent, os.O_RDONLY)
         except OSError:

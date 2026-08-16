@@ -21,6 +21,8 @@ All notable changes to Neural Blitz NG are documented here.
 - Ship JSON Schema inside the wheel (`neural_blitz/schemas/`) so `validate-config` works after `pip install`
 - Honor targets-file `defaults:` in batch and monitor (Starlink/mesh/nonprofit probe rates now apply)
 - Tolerate Windows directory `fsync` failures when persisting monitor state
+- Retry Windows `PermissionError` on atomic monitor state replace
+- Reject non-IP UDP resolver records without requiring `AF_UNIX`
 
 ### Dependencies
 - No new runtime dependencies.

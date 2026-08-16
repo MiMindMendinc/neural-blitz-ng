@@ -85,10 +85,11 @@ def test_server_removes_expired_client_without_full_cleanup() -> None:
 def test_resolver_rejects_non_ip_udp_records(monkeypatch: pytest.MonkeyPatch) -> None:
     import neural_blitz.udp_client as udp_client
 
+    unsupported_family = 99999
     monkeypatch.setattr(
         udp_client.socket,
         "getaddrinfo",
-        lambda *_args, **_kwargs: [(socket.AF_UNIX, socket.SOCK_DGRAM, 0, "", "/tmp/socket")],
+        lambda *_args, **_kwargs: [(unsupported_family, socket.SOCK_DGRAM, 0, "", "/tmp/socket")],
     )
     with pytest.raises(NeuralBlitzError, match="IPv4 or IPv6"):
         resolve_hosts("example", 9999)

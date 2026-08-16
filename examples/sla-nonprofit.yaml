@@ -1,0 +1,7 @@
+# Remote-site SLA — "telehealth/Zoom usable", not carrier-grade.
+# Tune after a few days on the real uplink; rural last-mile varies widely.
+min_success_rate: 98.0
+max_loss_rate: 2.0
+max_p95_us: 150000.0
+max_p99_us: 300000.0
+max_jitter_us: 40000.0

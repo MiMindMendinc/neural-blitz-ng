@@ -55,6 +55,131 @@ class TargetState:
         return "ok"
 
 
+@dataclass
+class MonitorRuntime:
+    """Mutable monitor settings that can change on config hot-reload."""
+
+    interval: int
+    history_limit: int
+    stale_after_seconds: int
+    targets_data: dict[str, Any] = field(default_factory=dict)
+    last_mtime: float | None = None
+    reload_error: str | None = None
+    last_reload_at: str | None = None
+    reload_count: int = 0
+
+
+def register_monitor_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    on_signal: Any,
+    on_reload: Any,
+    *,
+    signals_module: Any = signal,
+) -> None:
+    """Register SIGINT/SIGTERM for shutdown and SIGHUP for config reload when available."""
+    for sig in (signals_module.SIGINT, signals_module.SIGTERM):
+        with contextlib.suppress(NotImplementedError):
+            loop.add_signal_handler(sig, on_signal)
+    sighup = getattr(signals_module, "SIGHUP", None)
+    if sighup is None:
+        return
+    with contextlib.suppress(NotImplementedError, OSError):
+        loop.add_signal_handler(sighup, on_reload)
+
+
+def targets_file_mtime(path: str) -> float | None:
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return None
+
+
+def configured_target_labels(targets_data: dict[str, Any]) -> set[str]:
+    labels: set[str] = set()
+    for index, target in enumerate(targets_data.get("targets") or []):
+        if not isinstance(target, dict):
+            continue
+        labels.add(str(target.get("label") or target.get("name") or f"target-{index + 1}"))
+    return labels
+
+
+def prune_unconfigured_targets(
+    configured: set[str],
+    states: dict[str, TargetState],
+    latest: dict[str, LatencyStats],
+    history: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    removed = [label for label in list(states) if label not in configured]
+    for label in removed:
+        states.pop(label, None)
+        latest.pop(label, None)
+        history.pop(label, None)
+    return removed
+
+
+def apply_reloadable_monitor_settings(targets_data: dict[str, Any], runtime: MonitorRuntime) -> None:
+    """Apply interval/history/staleness from YAML. Bind, TLS, and auth require restart."""
+    section = targets_data.get("monitor", {})
+    if section is None:
+        section = {}
+    if not isinstance(section, dict):
+        raise ConfigError("Config section 'monitor' must be a mapping")
+    if "interval" in section:
+        interval = int(section["interval"])
+        if interval <= 0:
+            raise ConfigError("Monitor interval must be greater than zero")
+        runtime.interval = interval
+    if "history_limit" in section:
+        history_limit = int(section["history_limit"])
+        if history_limit <= 0:
+            raise ConfigError("Monitor history_limit must be greater than zero")
+        runtime.history_limit = history_limit
+    if "stale_after_seconds" in section:
+        stale_after_seconds = int(section["stale_after_seconds"])
+        if stale_after_seconds <= 0:
+            raise ConfigError("Monitor stale_after_seconds must be greater than zero")
+        runtime.stale_after_seconds = stale_after_seconds
+
+
+def reload_monitor_config(
+    config_data: dict[str, Any],
+    targets_file: str,
+    states: dict[str, TargetState],
+    latest: dict[str, LatencyStats],
+    history: dict[str, list[dict[str, Any]]],
+    runtime: MonitorRuntime,
+    *,
+    force: bool = False,
+) -> bool:
+    """Reload targets YAML when it changes. Invalid files keep the last-good config."""
+    mtime = targets_file_mtime(targets_file)
+    if not force and mtime is not None and mtime == runtime.last_mtime:
+        return False
+    try:
+        targets_data = load_targets_file(targets_file)
+        targets_data.setdefault("test", {})
+        trial: dict[str, TargetState] = {}
+        _initialize_target_states(config_data, targets_data, trial)
+        apply_reloadable_monitor_settings(targets_data, runtime)
+        labels = set(trial)
+        _initialize_target_states(config_data, targets_data, states)
+        removed = prune_unconfigured_targets(labels, states, latest, history)
+        runtime.targets_data = targets_data
+        runtime.last_mtime = mtime
+        runtime.reload_error = None
+        runtime.last_reload_at = datetime.now(timezone.utc).isoformat()
+        runtime.reload_count += 1
+        if removed:
+            logger.info("Config reload dropped target(s): %s", ", ".join(sorted(removed)))
+        logger.info("Monitor config loaded: %d target(s) from %s", len(labels), targets_file)
+        return True
+    except (ConfigError, OSError, TypeError, ValueError, KeyError) as exc:
+        runtime.reload_error = str(exc)
+        runtime.last_mtime = mtime
+        logger.error("Config reload rejected, keeping last-good config: %s", exc)
+        return False
+
+
 def _atomic_json_write(path: str, data: dict[str, Any]) -> None:
     """Durably replace *path* without exposing a partial JSON document."""
     destination = Path(path).expanduser()
@@ -186,6 +311,7 @@ def build_monitor_app(
     stale_after_seconds: int = 60,
     auth_token: str = "",
     health_requires_auth: bool = False,
+    runtime: MonitorRuntime | None = None,
 ) -> Any:
     from aiohttp import web
 
@@ -197,6 +323,12 @@ def build_monitor_app(
             for label, stats in latest.items()
         }
     )
+    if runtime is None:
+        runtime = MonitorRuntime(
+            interval=30,
+            history_limit=100,
+            stale_after_seconds=stale_after_seconds,
+        )
 
     @web.middleware
     async def authentication(request: web.Request, handler: Any) -> web.StreamResponse:
@@ -219,7 +351,7 @@ def build_monitor_app(
         return web.Response(text=format_prometheus_metrics(latest), content_type="text/plain; version=0.0.4")
 
     async def health(_: web.Request) -> web.Response:
-        statuses = {label: state.status(stale_after_seconds) for label, state in states.items()}
+        statuses = {label: state.status(runtime.stale_after_seconds) for label, state in states.items()}
         healthy = sum(1 for status in statuses.values() if status == "ok")
         status = "ok" if statuses and healthy == len(statuses) else "degraded"
         return web.json_response(
@@ -229,6 +361,9 @@ def build_monitor_app(
                 "targets": len(states),
                 "healthy_targets": healthy,
                 "target_status": statuses,
+                "config_reload_error": runtime.reload_error,
+                "config_last_reload_at": runtime.last_reload_at,
+                "config_reload_count": runtime.reload_count,
             },
             status=200 if status == "ok" else 503,
         )
@@ -258,7 +393,7 @@ def build_monitor_app(
             raise web.HTTPNotFound(text=json.dumps({"error": "unknown target"}), content_type="application/json")
         return web.json_response(
             {
-                "status": state.status(stale_after_seconds),
+                "status": state.status(runtime.stale_after_seconds),
                 "last_error": state.last_error,
                 "consecutive_failures": state.consecutive_failures,
             }
@@ -282,6 +417,7 @@ async def run_monitor_loop(
     monitor_config: MonitorConfig,
     *,
     use_rich: bool = False,
+    reload_config: bool = True,
 ) -> None:
     try:
         from aiohttp import web
@@ -292,6 +428,13 @@ async def run_monitor_loop(
     history: dict[str, list[dict[str, Any]]] = {}
     states: dict[str, TargetState] = {}
     shutdown = asyncio.Event()
+    wakeup = asyncio.Event()
+    reload_now = asyncio.Event()
+    runtime = MonitorRuntime(
+        interval=monitor_config.interval,
+        history_limit=monitor_config.history_limit,
+        stale_after_seconds=monitor_config.stale_after_seconds,
+    )
     auth_token = ""
     if monitor_config.auth_token_file:
         try:
@@ -304,11 +447,14 @@ async def run_monitor_loop(
     initial_targets_data = load_targets_file(targets_file)
     initial_targets_data.setdefault("test", {})
     _initialize_target_states(config_data, initial_targets_data, states)
+    apply_reloadable_monitor_settings(initial_targets_data, runtime)
+    runtime.targets_data = initial_targets_data
+    runtime.last_mtime = targets_file_mtime(targets_file)
+    runtime.last_reload_at = datetime.now(timezone.utc).isoformat()
+    runtime.reload_count = 1
 
     async def run_cycle() -> None:
-        targets_data = load_targets_file(targets_file)
-        targets_data.setdefault("test", {})
-        _initialize_target_states(config_data, targets_data, states)
+        targets_data = runtime.targets_data
         cycle_failures: dict[str, str] = {}
         results = await run_batch_tests(config_data, targets_data, use_rich=use_rich, failures=cycle_failures)
         for label, error in cycle_failures.items():
@@ -319,8 +465,8 @@ async def run_monitor_loop(
             latest[result.label] = result
             hist = history.setdefault(result.label, [])
             hist.append(result.to_dict())
-            if len(hist) > monitor_config.history_limit:
-                del hist[: len(hist) - monitor_config.history_limit]
+            if len(hist) > runtime.history_limit:
+                del hist[: len(hist) - runtime.history_limit]
             state = states.setdefault(result.label, TargetState())
             state.latest = result
             state.history = hist
@@ -334,7 +480,7 @@ async def run_monitor_loop(
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                     "targets": {
                         label: {
-                            "status": state.status(monitor_config.stale_after_seconds),
+                            "status": state.status(runtime.stale_after_seconds),
                             "last_error": state.last_error,
                             "consecutive_failures": state.consecutive_failures,
                             "latest": state.latest.to_dict() if state.latest else None,
@@ -349,9 +495,10 @@ async def run_monitor_loop(
         latest,
         history,
         states=states,
-        stale_after_seconds=monitor_config.stale_after_seconds,
+        stale_after_seconds=runtime.stale_after_seconds,
         auth_token=auth_token,
         health_requires_auth=monitor_config.health_requires_auth,
+        runtime=runtime,
     )
 
     runner = web.AppRunner(app)
@@ -368,20 +515,36 @@ async def run_monitor_loop(
 
     def on_signal() -> None:
         shutdown.set()
+        wakeup.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        with contextlib.suppress(NotImplementedError):
-            loop.add_signal_handler(sig, on_signal)
+    def on_reload() -> None:
+        reload_now.set()
+        wakeup.set()
+
+    register_monitor_signal_handlers(loop, on_signal, on_reload)
 
     try:
         while not shutdown.is_set():
+            if reload_config:
+                reload_monitor_config(
+                    config_data,
+                    targets_file,
+                    states,
+                    latest,
+                    history,
+                    runtime,
+                    force=reload_now.is_set(),
+                )
+                reload_now.clear()
             try:
                 await run_cycle()
             except Exception as exc:
                 logger.error("Monitor cycle failed: %s", exc)
+            if shutdown.is_set() or reload_now.is_set():
+                continue
+            wakeup.clear()
             try:
-                await asyncio.wait_for(shutdown.wait(), timeout=monitor_config.interval)
-                break
+                await asyncio.wait_for(wakeup.wait(), timeout=runtime.interval)
             except asyncio.TimeoutError:
                 continue
     finally:

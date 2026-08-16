@@ -88,6 +88,29 @@ def test_execute_monitor(mock_load, mock_monitor):
         i_understand_authorized_target=False,
     )
     assert execute_monitor(args, {}, use_rich=False) == 0
+    mock_monitor.assert_awaited_once()
+    assert mock_monitor.await_args.kwargs["reload_config"] is True
+
+
+@pytest.mark.unit
+@mock.patch("neural_blitz.cli.run_monitor_loop", new_callable=mock.AsyncMock)
+@mock.patch("neural_blitz.cli.load_targets_file")
+def test_execute_monitor_no_reload(mock_load, mock_monitor):
+    mock_load.return_value = {
+        "targets": [{"label": "local", "host": "127.0.0.1", "port": 9999}],
+        "__base_dir": ".",
+    }
+    args = Namespace(
+        targets_file="t.yaml",
+        bind=None,
+        http_port=None,
+        interval=None,
+        log_level="INFO",
+        i_understand_authorized_target=False,
+        no_reload=True,
+    )
+    assert execute_monitor(args, {}, use_rich=False) == 0
+    assert mock_monitor.await_args.kwargs["reload_config"] is False
 
 
 @pytest.mark.unit

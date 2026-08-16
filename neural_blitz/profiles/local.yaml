@@ -1,0 +1,36 @@
+# Neural Blitz NG — local loopback profile
+# First run: start an echo server, then test or monitor this file.
+#   neural-blitz server --bind 127.0.0.1 --port 9999
+#   neural-blitz test --host 127.0.0.1 --port 9999 --count 1000
+#   neural-blitz monitor --targets-file neural_blitz.yaml
+config_version: 1
+defaults:
+  count: 1000
+  size: 64
+  concurrency: 50
+  timeout: 2.0
+  rate: 1000
+  warmup: 50
+  max_retries: 0
+  co_correction: true
+
+monitor:
+  bind: "0.0.0.0"
+  http_port: 8888
+  interval: 30
+  history_limit: 100
+  stale_after_seconds: 60
+  # auth_token_file: /run/secrets/neural_blitz_monitor_token
+  # tls_cert_file: /run/secrets/tls.crt
+  # tls_key_file: /run/secrets/tls.key
+
+targets:
+  - label: local
+    host: 127.0.0.1
+    port: 9999
+    sla: sla-local.yaml
+
+server:
+  bind: 127.0.0.1
+  port: 9999
+  # IPv6 loopback: bind: "::1"

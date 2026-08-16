@@ -1,0 +1,8 @@
+# Multi-hop mesh SLA — per-hop, not end-to-end stacked.
+# Loss and jitter compound across hops; keep per-hop thresholds honest
+# so one bad relay is visible before the whole path looks "a bit slow".
+min_success_rate: 90.0
+max_loss_rate: 8.0
+max_p95_us: 150000.0
+max_p99_us: 300000.0
+max_jitter_us: 60000.0

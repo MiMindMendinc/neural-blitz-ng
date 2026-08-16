@@ -35,6 +35,13 @@ def test_schema_matches_all_runtime_config_fields():
         ROOT / "neural_blitz.yaml",
         ROOT / "examples" / "neural_blitz.yaml",
         ROOT / "examples" / "docker-neural_blitz.yaml",
+        ROOT / "examples" / "starlink-residential.yaml",
+        ROOT / "examples" / "mesh-multihop.yaml",
+        ROOT / "examples" / "nonprofit-remote-site.yaml",
+        ROOT / "neural_blitz" / "profiles" / "local.yaml",
+        ROOT / "neural_blitz" / "profiles" / "starlink.yaml",
+        ROOT / "neural_blitz" / "profiles" / "mesh.yaml",
+        ROOT / "neural_blitz" / "profiles" / "nonprofit.yaml",
     ],
 )
 def test_examples_validate_against_strict_schema(config_path: Path):

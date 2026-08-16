@@ -2,6 +2,24 @@
 
 All notable changes to Neural Blitz NG are documented here.
 
+## [9.1.0] - 2026-08-16
+
+### Added
+- Operator config profiles: `neural-blitz init-config --profile local|starlink|mesh|nonprofit`
+- Real-world example configs and SLAs for Starlink residential, multi-hop mesh, and nonprofit/remote sites
+- Monitor config hot-reload on targets-file mtime changes and `SIGHUP` (invalid YAML keeps last-good config)
+- `--no-reload` to pin monitor startup config
+- Importable Grafana dashboard covering all `neural_blitz_*` metrics
+- `/health` fields for config reload status
+- `--i-understand-authorized-target` now sticks on monitor reloads via in-memory config defaults
+
+### Changed
+- README positioning for Starlink / mesh / rural operators, including a ping / iperf / SmokePing comparison
+- `init-config` writes a sibling SLA file and prints next-step commands
+
+### Dependencies
+- No new runtime dependencies.
+
 ## [9.0.0] - 2026-07-09
 
 ### Added

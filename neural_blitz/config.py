@@ -14,6 +14,20 @@ from neural_blitz.constants import DEFAULT_CONFIG_BASENAME, HEADER_SIZE
 from neural_blitz.errors import ConfigError, DependencyMissing
 from neural_blitz.metrics import validate_metrics_output_path
 
+PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
+CONFIG_PROFILES: dict[str, str] = {
+    "local": "Local loopback benchmark (default)",
+    "starlink": "Starlink residential uplink",
+    "mesh": "Multi-hop mesh path",
+    "nonprofit": "Nonprofit / remote site",
+}
+PROFILE_SLA_FILES: dict[str, str] = {
+    "local": "sla-local.yaml",
+    "starlink": "sla-starlink.yaml",
+    "mesh": "sla-mesh.yaml",
+    "nonprofit": "sla-nonprofit.yaml",
+}
+
 try:
     import yaml
 except ImportError:
@@ -362,43 +376,38 @@ def build_test_config_from_overrides(config_data: dict[str, Any], overrides: dic
     return normalize_test_values(values)
 
 
-def write_sample_config(path: str = DEFAULT_CONFIG_BASENAME) -> None:
+def list_config_profiles() -> dict[str, str]:
+    """Return profile name → one-line description for CLI listing."""
+    return dict(CONFIG_PROFILES)
+
+
+def _profile_source(profile: str) -> Path:
+    if profile not in CONFIG_PROFILES:
+        available = ", ".join(CONFIG_PROFILES)
+        raise ConfigError(f"Unknown config profile {profile!r}. Available: {available}")
+    source = PROFILES_DIR / f"{profile}.yaml"
+    if not source.is_file():
+        raise ConfigError(f"Packaged profile is missing: {source}")
+    return source
+
+
+def write_sample_config(path: str = DEFAULT_CONFIG_BASENAME, *, profile: str = "local") -> list[str]:
+    """Write a packaged operator profile and its sibling SLA file.
+
+    Returns the paths that were written so the CLI can print next steps.
+    """
     ensure_yaml_available()
+    source = _profile_source(profile)
     destination = Path(path).expanduser()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    sample = """# Neural Blitz NG example configuration
-config_version: 1
-defaults:
-  count: 1000
-  size: 64
-  concurrency: 50
-  timeout: 2.0
-  rate: 1000
-  warmup: 50
-  max_retries: 0
-  co_correction: true
-
-monitor:
-  bind: "0.0.0.0"
-  http_port: 8888
-  interval: 30
-  history_limit: 100
-  stale_after_seconds: 60
-  # auth_token_file: /run/secrets/neural_blitz_monitor_token
-  # tls_cert_file: /run/secrets/tls.crt
-  # tls_key_file: /run/secrets/tls.key
-
-targets:
-  - label: local
-    host: 127.0.0.1
-    port: 9999
-    sla: examples/sla.yaml
-
-server:
-  bind: 127.0.0.1
-  port: 9999
-"""
+    sla_name = PROFILE_SLA_FILES[profile]
+    sla_source = PROFILES_DIR / sla_name
+    if not sla_source.is_file():
+        raise ConfigError(f"Packaged SLA for profile {profile!r} is missing: {sla_source}")
     try:
-        destination.write_text(sample, encoding="utf-8")
+        destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        sla_destination = destination.parent / sla_name
+        sla_destination.write_text(sla_source.read_text(encoding="utf-8"), encoding="utf-8")
     except OSError as exc:
         raise ConfigError(f"Unable to write sample config '{destination}': {exc}") from exc
+    return [str(destination), str(sla_destination)]

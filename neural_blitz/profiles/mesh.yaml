@@ -1,0 +1,47 @@
+# Neural Blitz NG — multi-hop mesh path
+#
+# Place a UDP echo server at each hop you own (node, gateway, uplink).
+# Monitor measures hops independently so you can see which hop lost
+# the packet instead of staring at one blended ICMP average.
+#
+# Replace each host/port with the echo server for that hop. Keep
+# authorized_target false until you own the path, then:
+#   neural-blitz monitor --targets-file neural_blitz.yaml \
+#     --i-understand-authorized-target
+#
+# Gentle rate, longer timeout, 60s interval — mesh backhaul is not a LAN.
+config_version: 1
+defaults:
+  count: 150
+  size: 64
+  concurrency: 4
+  timeout: 5.0
+  rate: 20
+  warmup: 5
+  max_retries: 0
+  co_correction: true
+
+monitor:
+  bind: "0.0.0.0"
+  http_port: 8888
+  interval: 60
+  history_limit: 180
+  stale_after_seconds: 180
+
+targets:
+  - label: hop-1-node
+    host: 127.0.0.1
+    port: 9999
+    sla: sla-mesh.yaml
+  - label: hop-2-gateway
+    host: 127.0.0.1
+    port: 9998
+    sla: sla-mesh.yaml
+  - label: hop-3-uplink
+    host: 127.0.0.1
+    port: 9997
+    sla: sla-mesh.yaml
+
+server:
+  bind: 127.0.0.1
+  port: 9999

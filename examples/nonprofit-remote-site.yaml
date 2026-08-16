@@ -1,0 +1,38 @@
+# Neural Blitz NG — nonprofit / remote site uplink
+#
+# One site, one question: is the clinic/school/field office usable for
+# voice, video, and file drop — not a lab benchmark.
+#
+# Run the echo server at HQ or a VPS you control. Replace host, then:
+#   neural-blitz monitor --targets-file neural_blitz.yaml \
+#     --i-understand-authorized-target
+#
+# Low rate, 2-minute interval, telehealth-oriented SLA. Safe default host
+# is localhost so first-run works before you point at the real uplink.
+config_version: 1
+defaults:
+  count: 100
+  size: 64
+  concurrency: 4
+  timeout: 4.0
+  rate: 25
+  warmup: 5
+  max_retries: 0
+  co_correction: true
+
+monitor:
+  bind: "0.0.0.0"
+  http_port: 8888
+  interval: 120
+  history_limit: 120
+  stale_after_seconds: 300
+
+targets:
+  - label: remote-site-uplink
+    host: 127.0.0.1
+    port: 9999
+    sla: sla-nonprofit.yaml
+
+server:
+  bind: 127.0.0.1
+  port: 9999

@@ -330,8 +330,9 @@ def test_execute_validate_sla_serializes_load_errors(mock_load_sla: mock.Mock, c
 @mock.patch("neural_blitz.cli.write_sample_config")
 def test_execute_init_config_uses_rich_success_panel(mock_write: mock.Mock, mock_console: mock.Mock, tmp_path: Path):
     output = tmp_path / "nested" / "config.yaml"
+    mock_write.return_value = [str(output), str(tmp_path / "sla-local.yaml")]
     assert cli.execute_init_config(Namespace(output=str(output)), use_rich=True) == 0
-    mock_write.assert_called_once_with(str(output))
+    mock_write.assert_called_once_with(str(output), profile="local")
     mock_console.print.assert_called_once()
 
 
@@ -355,9 +356,20 @@ def test_execute_batch_authorizes_targets_before_running(mock_load_targets: mock
 
 @pytest.mark.unit
 def test_authorization_flag_leaves_non_mapping_test_section_unchanged():
+    config = {"test": "nope"}
     targets = {"test": "not-a-mapping"}
-    cli._apply_authorized_flag({}, targets, authorized=True)
+    cli._apply_authorized_flag(config, targets, authorized=True)
+    assert config["test"] == "nope"
     assert targets["test"] == "not-a-mapping"
+
+
+@pytest.mark.unit
+def test_authorization_flag_marks_config_and_targets_for_monitor_reload():
+    config: dict[str, object] = {}
+    targets: dict[str, object] = {}
+    cli._apply_authorized_flag(config, targets, authorized=True)
+    assert config["test"]["authorized_target"] is True  # type: ignore[index]
+    assert targets["test"]["authorized_target"] is True  # type: ignore[index]
 
 
 @pytest.mark.unit

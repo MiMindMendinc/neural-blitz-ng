@@ -2,21 +2,21 @@
 
 # Neural Blitz NG
 
-### Measure the link before the outage writes the story.
+### UDP latency, loss, and jitter for Starlink, mesh, and rural links — without an observability platform.
 
-**Local-first UDP latency benchmarking and monitoring for practical operators.**
+**Local-first. Authorized-use. Operator-simple.**
 
 [![CI](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/ci.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/codeql.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/codeql.yml)
 [![Release](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/release.yml/badge.svg)](https://github.com/MiMindMendinc/neural-blitz-ng/actions/workflows/release.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-9.0.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-9.1.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](docs/DOCKER.md)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://github.com/astral-sh/ruff)
 [![mypy](https://img.shields.io/badge/types-mypy-blue)](https://mypy-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)](UPGRADE_REPORT.md)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](UPGRADE_REPORT.md)
 [![Security](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
 [![Contributing](https://img.shields.io/badge/contributing-welcome-0f766e)](CONTRIBUTING.md)
 [![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
@@ -30,7 +30,7 @@
 [Docs](docs/QUICKSTART.md) ·
 [Changelog](CHANGELOG.md)
 
-Built by **[Michigan MindMend Inc.](https://github.com/MiMindMendinc)** for nonprofits, small businesses, MSPs, homelabs, rural connectivity projects, and edge AI operators.
+Built by **[Michigan MindMend Inc.](https://github.com/MiMindMendinc)** for nonprofits, small MSPs, homelabs, rural connectivity, Starlink sites, multi-hop mesh, and edge AI operators.
 
 </div>
 
@@ -40,16 +40,34 @@ Built by **[Michigan MindMend Inc.](https://github.com/MiMindMendinc)** for nonp
 
 Neural Blitz NG measures **UDP latency, packet loss, jitter, and SLA compliance** with a practical CLI, YAML configuration, Prometheus endpoints, PDF reports, and Docker deployment — without enterprise monitoring complexity.
 
+It answers the questions operators actually ask on contended links:
+
+- Is this Starlink / WISP / mesh hop dropping realtime traffic?
+- Is jitter spiking during satellite handovers or relay congestion?
+- Did the path regress after a firmware, routing, or dish change?
+- Can I expose that as Prometheus metrics without standing up a platform?
+
 | Capability | Description |
 | ---------- | ----------- |
-| UDP echo server | Local test target for repeatable benchmarks |
+| UDP echo server | Local or far-side test target for repeatable benchmarks |
 | Single-target test | Latency percentiles, loss, jitter, CO correction |
-| Batch YAML mode | Multi-target runs from one config file |
-| Monitor mode | Periodic tests + HTTP `/health` and `/metrics` |
-| Prometheus | `neural_blitz_*` metrics for Grafana |
+| Batch YAML mode | Multi-target / multi-hop runs from one config file |
+| Monitor mode | Periodic tests + HTTP `/health` and `/metrics`, with config hot-reload |
+| Prometheus | `neural_blitz_*` metrics + importable Grafana dashboard |
 | SLA checks | Pass/fail thresholds with exit code `2` |
 | Compare mode | Baseline vs candidate regression checks |
+| Operator profiles | Starlink, mesh, nonprofit/remote-site, and local starters |
 | PDF reports | Optional branded reports via `reportlab` |
+
+## Why this instead of ping / iperf / smokeping
+
+| Tool | What it is good at | Why operators still need this |
+| ---- | ------------------- | ----------------------------- |
+| **ping** | Quick ICMP reachability | ICMP is often deprioritized or blocked. It does not measure UDP loss/jitter, has no p95/p99 or SLA exit codes, and is a weak proxy for Starlink handovers, mesh backhaul, and realtime apps. |
+| **iperf** | Filling a pipe to measure throughput | Saturates rural and LEO links you cannot afford to flood. It is a capacity test, not a continuous latency SLI, and it is not a monitor. |
+| **SmokePing** | Long-term ICMP graphs | Heavier to deploy, RRDtool-era, and still ICMP-centric. No UDP echo, no YAML SLA gates, no `compare` in CI, no authorized-use safety model. |
+
+Neural Blitz NG is the small tool in the gap: **UDP** (what the application path uses), **local-first** (one binary/CLI, YAML, Docker), **honest percentiles and jitter**, **Prometheus without a platform**, and **hard ceilings plus an authorized-target gate**. No scanning, spoofing, or amplification.
 
 ## Why it exists
 
@@ -68,6 +86,7 @@ Neural Blitz NG fills the gap between `ping` and a full observability platform.
 git clone https://github.com/MiMindMendinc/neural-blitz-ng.git
 cd neural-blitz-ng
 pip install -e ".[dev,pdf]"
+neural-blitz init-config --profile starlink   # or: mesh | nonprofit | local
 ```
 
 **Terminal 1 — echo server**
@@ -112,7 +131,7 @@ make coverage
 | `neural-blitz validate-config` | Validate YAML config |
 | `neural-blitz validate-sla` | Validate SLA YAML |
 | `neural-blitz version` | Print version |
-| `neural-blitz init-config` | Write sample config |
+| `neural-blitz init-config` | Write a sample config + SLA (`--profile local\|starlink\|mesh\|nonprofit`) |
 
 ```bash
 neural-blitz --help
@@ -125,6 +144,25 @@ python -m neural_blitz --help
 neural-blitz batch --targets-file examples/neural_blitz.yaml --output metrics/batch.json
 ```
 
+## Real-world configs
+
+Starter YAML lives in `examples/` and is what `init-config --profile` writes:
+
+| Profile | File | Probe style |
+| ------- | ---- | ----------- |
+| `starlink` | [examples/starlink-residential.yaml](examples/starlink-residential.yaml) | Gentle 50 pps, 60s interval, handover-tolerant SLA |
+| `mesh` | [examples/mesh-multihop.yaml](examples/mesh-multihop.yaml) | Per-hop targets, 20 pps, 5s timeout |
+| `nonprofit` | [examples/nonprofit-remote-site.yaml](examples/nonprofit-remote-site.yaml) | One uplink, 2-minute interval, telehealth-oriented SLA |
+| `local` | [examples/neural_blitz.yaml](examples/neural_blitz.yaml) | Loopback / CI bench |
+
+Replace `host` with **your** UDP echo server. Public or third-party hosts still require `--i-understand-authorized-target`.
+
+```bash
+neural-blitz init-config --list-profiles
+neural-blitz init-config --profile mesh --output neural_blitz.yaml
+neural-blitz validate-config neural_blitz.yaml
+```
+
 ## Monitor mode
 
 ```bash
@@ -132,6 +170,8 @@ neural-blitz monitor --targets-file examples/neural_blitz.yaml --http-port 8888
 curl http://127.0.0.1:8888/health
 curl http://127.0.0.1:8888/metrics/prometheus
 ```
+
+Monitor reloads the targets file automatically when it changes (and on `SIGHUP`). Invalid YAML keeps the last-good config; bind/TLS/auth still require a restart. Use `--no-reload` to pin the startup file.
 
 Monitor probes have distinct meanings:
 
@@ -156,6 +196,8 @@ See [docs/DOCKER.md](docs/DOCKER.md).
 ## Prometheus
 
 Scrape `/metrics/prometheus` from monitor mode. Metric names use the `neural_blitz_*` prefix.
+
+Import [examples/grafana-dashboard.json](examples/grafana-dashboard.json) into Grafana (Prometheus datasource). Panels cover success, loss, p50/p95/p99, jitter, packet snapshots, and run freshness. Packet counts are **gauges** (latest run); do not apply `rate()`.
 
 See [docs/PROMETHEUS.md](docs/PROMETHEUS.md) and [examples/prometheus.yml](examples/prometheus.yml).
 
@@ -199,7 +241,7 @@ Read [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) and [SECURITY.md](SECURITY
 
 ```text
 neural_blitz/          # Python package (CLI, UDP, metrics, monitor)
-tests/                 # pytest suite (99 tests, 86% coverage)
+tests/                 # pytest suite
 docs/                  # operator documentation
 examples/              # YAML, Prometheus, Grafana samples
 .github/workflows/     # CI, CodeQL, release
@@ -222,7 +264,7 @@ examples/              # YAML, Prometheus, Grafana samples
 
 ## Roadmap
 
-- [ ] Config hot-reload for monitor mode
+- [x] Config hot-reload for monitor mode
 - [ ] IPv6-first bind examples
 - [ ] Helm chart for Kubernetes monitor deployments
 
